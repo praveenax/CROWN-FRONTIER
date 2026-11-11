@@ -25,8 +25,21 @@ function troopTypeOf(army) {
     : "spearman";
 }
 
-function combatStat(army, stat) {
-  return army.kind === "army" ? TROOP_TYPES[troopTypeOf(army)][stat] : 100;
+export function generalBonuses(general) {
+  const points = (skill) => clamp((general?.skills?.[skill] ?? 1) - 1, 0, 10);
+  return {
+    attack: points("fighting") * 4,
+    recovery: points("captain") * 2,
+    growth: points("charisma") * 5,
+  };
+}
+
+// Keep strength in hundredths so bonus percentages cannot disturb exact ties.
+function combatStatInHundredths(army, stat) {
+  if (army.kind !== "army") return 10000;
+  const base = TROOP_TYPES[troopTypeOf(army)][stat];
+  const bonus = stat === "attack" ? generalBonuses(army.general).attack : 0;
+  return base * (100 + bonus);
 }
 
 function archerVolley(archers, target) {
@@ -542,8 +555,8 @@ function resolveArrival(state, army, objective) {
     category,
   );
   if (enemy) {
-    const attackerStat = combatStat(army, "attack");
-    const defenderStat = combatStat(enemy, "defense");
+    const attackerStat = combatStatInHundredths(army, "attack");
+    const defenderStat = combatStatInHundredths(enemy, "defense");
     const attackerFavoredBeforeVolley =
       army.troops * attackerStat > enemy.troops * defenderStat;
     const attackerVolley = archerVolley(army, enemy);
@@ -583,7 +596,7 @@ function resolveArrival(state, army, objective) {
     const winner = attackerWins ? army : enemy;
     const loser = attackerWins ? enemy : army;
     if (loser.troops > 0) {
-      const winnerStat = combatStat(
+      const winnerStat = combatStatInHundredths(
         winner,
         attackerWins ? "attack" : "defense",
       );
@@ -602,13 +615,15 @@ function resolveArrival(state, army, objective) {
     const closeFight =
       Math.min(attackerPower, defenderPower) >=
       Math.max(attackerPower, defenderPower) * 0.9;
+    const fightingBonus = generalBonuses(army.general).attack;
+    const fightingReport = fightingBonus ? ` Fighting added +${fightingBonus}% attack.` : "";
     const volleyReport =
       attackerVolley || defenderVolley
         ? ` Archer volleys caused ${defenderVolley} attacker and ${attackerVolley} defender casualties.`
         : "";
     addLog(
       state,
-      `${describe(army)} attacked ${describe(enemy)} at ${city ? `${city.name} ` : ""}(${army.x + 1}, ${army.y + 1}): ${attackerStrength} vs ${defenderStrength} troops (${attackerPower} attack vs ${defenderPower} defense).${volleyReport} ${describe(winner)} defeated ${describe(loser)} with ${winner.troops} remaining; ${loser.general ? `General ${loser.general.name} was lost.` : "the defeated force was destroyed."} [${operationId}] Attacker survivors: ${attackerWins ? army.troops : 0}; defender survivors: ${attackerWins ? 0 : enemy.troops}.${city ? ` Settlement: ${cityLabel(city)}.` : ""}`,
+      `${describe(army)} attacked ${describe(enemy)} at ${city ? `${city.name} ` : ""}(${army.x + 1}, ${army.y + 1}): ${attackerStrength} vs ${defenderStrength} troops (${attackerPower / 100} attack vs ${defenderPower / 100} defense).${volleyReport}${fightingReport} ${describe(winner)} defeated ${describe(loser)} with ${winner.troops} remaining; ${loser.general ? `General ${loser.general.name} was lost.` : "the defeated force was destroyed."} [${operationId}] Attacker survivors: ${attackerWins ? army.troops : 0}; defender survivors: ${attackerWins ? 0 : enemy.troops}.${city ? ` Settlement: ${cityLabel(city)}.` : ""}`,
       category,
     );
     if (decidingVolley || closeFight) {
@@ -657,16 +672,17 @@ function resolveArrival(state, army, objective) {
     (city.owner || army.kind === "army") &&
     city.defense > 0
   ) {
-    const strength = Math.floor(
-      (army.troops * combatStat(army, "attack")) / 100,
-    );
+    const attackStat = combatStatInHundredths(army, "attack");
+    const strength = Math.floor(army.troops * attackStat / 10000);
+    const fighting = generalBonuses(army.general).attack;
+    const fightingReport = fighting ? ` Fighting added +${fighting}% attack.` : "";
     const defense = city.defense;
     if (strength <= defense) {
       city.defense = Math.max(1, defense - strength);
       state.armies = state.armies.filter((unit) => unit.id !== army.id);
       addLog(
         state,
-        `${army.name} [${state.kingdoms[army.owner].name}] attacked ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}. The city held with ${city.defense} defense remaining${army.general ? `; General ${army.general.name} was lost` : ""}. [${operationId}] Attacker survivors: 0; settlement: ${cityLabel(city)}.`,
+        `${army.name} [${state.kingdoms[army.owner].name}] attacked ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}. The city held with ${city.defense} defense remaining${army.general ? `; General ${army.general.name} was lost` : ""}.${fightingReport} [${operationId}] Attacker survivors: 0; settlement: ${cityLabel(city)}.`,
         category,
       );
       rememberGeneral(
@@ -681,11 +697,11 @@ function resolveArrival(state, army, objective) {
         );
       return;
     }
-    army.troops -= Math.ceil((defense * 100) / combatStat(army, "attack"));
+    army.troops -= Math.ceil(defense * 10000 / attackStat);
     city.defense = 0;
     addLog(
       state,
-      `${army.name} [${state.kingdoms[army.owner].name}] breached ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}, with ${army.troops} troops remaining. [${operationId}] Settlement: ${cityLabel(city)}.`,
+      `${army.name} [${state.kingdoms[army.owner].name}] breached ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}, with ${army.troops} troops remaining.${fightingReport} [${operationId}] Settlement: ${cityLabel(city)}.`,
       category,
     );
     rememberGeneral(
@@ -1292,24 +1308,34 @@ export function endTurn(state, { automatic = false } = {}) {
     next,
     `Turn ${next.turn} begins. Your cities have produced resources.`,
   );
+  const garrisons = new Map(next.armies
+    .filter((army) => army.kind === "army")
+    .map((army) => [key(army.x, army.y), army]));
   for (const city of next.cities) {
     if (city.owner) {
       const development = cityDevelopment(city);
+      const garrison = garrisons.get(key(city.x, city.y));
+      const charisma = garrison?.owner === city.owner
+        ? generalBonuses(garrison.general).growth : 0;
+      const extraGrowth = Math.floor(development.growth * charisma / 100);
+      const growth = development.growth + extraGrowth;
+      const growthReport = extraGrowth ? ` (+${extraGrowth} from Charisma)` : "";
       next.resources[city.owner].gold += development.gold;
       next.resources[city.owner].food += development.food;
       addLog(
         next,
-        `${cityLabel(city)} [${state.kingdoms[city.owner].name}] produced ${development.gold} gold and ${development.food} food and grew by ${development.growth} population.`,
+        `${cityLabel(city)} [${state.kingdoms[city.owner].name}] produced ${development.gold} gold and ${development.food} food and grew by ${growth} population${growthReport}.`,
         "production",
       );
-      changePopulation(next, city, city.population + development.growth);
+      changePopulation(next, city, city.population + growth);
     }
     city.defense = cityDevelopment(city).defense;
   }
   for (const army of next.armies) {
     if (!isGarrison(next, army) || army.troops >= army.maxTroops) continue;
+    const recoveryRate = 10 + generalBonuses(army.general).recovery;
     const recovered = Math.min(
-      Math.ceil(army.maxTroops * 0.1),
+      Math.ceil(army.maxTroops * recoveryRate / 100),
       army.maxTroops - army.troops,
     );
     army.troops += recovered;
@@ -1319,7 +1345,7 @@ export function endTurn(state, { automatic = false } = {}) {
     );
     addLog(
       next,
-      `${army.name} [${state.kingdoms[army.owner].name}] recovered ${recovered} soldiers in ${city.name} (${army.troops}/${army.maxTroops}). Unit: ${army.id}; settlement: ${cityLabel(city)}.`,
+      `${army.name} [${state.kingdoms[army.owner].name}] recovered ${recovered} soldiers in ${city.name} (${army.troops}/${army.maxTroops}). Recovery rate: ${recoveryRate}%. Unit: ${army.id}; settlement: ${cityLabel(city)}.`,
       "recovery",
     );
   }

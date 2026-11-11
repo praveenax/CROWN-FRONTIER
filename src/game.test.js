@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { autoplayStep, buildBuilding, cameraFor, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, MAP_SIZES, MAX_MERGED_UNITS, MAX_TROOPS, moveCamera, moveUnit, recruit, terrainAt, TROOP_TYPES, resolveWorldEvent, worldEventChoices, VIEW_SIZE } from './game.js';
+import { autoplayStep, buildBuilding, cameraFor, chronicleEntries, cityDevelopment, createGame, endTurn, generalBonuses, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, MAP_SIZES, MAX_MERGED_UNITS, MAX_TROOPS, moveCamera, moveUnit, recruit, terrainAt, TROOP_TYPES, resolveWorldEvent, worldEventChoices, VIEW_SIZE } from './game.js';
 import { WORLD_EVENTS } from './worldEvents.js';
 
 test('creates the world with four kingdoms, fog, and a bounded viewport', () => {
@@ -915,4 +915,48 @@ test('world events address only the configured kingdoms and use their names', ()
   assert.equal(decisions.length, 2);
   assert.ok(decisions.some(line => line.includes('Ember Crown chose')));
   assert.ok(decisions.some(line => line.includes('Azure Pact chose')));
+});
+
+
+test('Fighting can break an even matchup and improve a siege assault', () => {
+  const battle = (fighting) => {
+    const game = createGame(12);
+    game.armies[0].troops = 60;
+    game.armies[0].general.skills.fighting = fighting;
+    Object.assign(game.armies[1], { x: 50, y: 49, troops: 40 });
+    return moveUnit(game, 'army-1', 50, 49);
+  };
+  assert.ok(!battle(1).armies.some(army => army.id === 'army-1'));
+  const victory = battle(2);
+  assert.ok(victory.armies.some(army => army.id === 'army-1'));
+  assert.ok(victory.log.some(line => line.includes('Fighting added +4% attack')));
+
+  const siege = createGame(12);
+  const guard = siege.armies[0];
+  Object.assign(guard, { x: 52, y: 48, troops: 20 });
+  guard.general.skills.fighting = 6;
+  const captured = moveUnit(siege, guard.id, 52, 47);
+  assert.equal(captured.cities.find(city => city.id === 'ashford').owner, 'england');
+  assert.equal(captured.armies.find(army => army.id === guard.id).troops, 3);
+});
+
+test('Captain and Charisma benefit a friendly garrison and stop when it leaves', () => {
+  const game = createGame(12);
+  const guard = game.armies[0];
+  guard.troops = 90;
+  guard.general.skills.captain = 6;
+  guard.general.skills.charisma = 5;
+  const capital = game.cities.find(city => city.id === 'london');
+  const baseGrowth = cityDevelopment(capital).growth;
+  const next = endTurn(game);
+  assert.equal(next.armies[0].troops, 114);
+  assert.equal(next.cities.find(city => city.id === capital.id).population,
+    capital.population + baseGrowth * 1.2);
+
+  const departed = endTurn(moveUnit(game, guard.id, 50, 49));
+  assert.equal(departed.armies[0].troops, 90);
+  assert.equal(departed.cities.find(city => city.id === capital.id).population,
+    capital.population + baseGrowth);
+  assert.deepEqual(generalBonuses({ skills: { fighting: 50, captain: 50, charisma: 50 } }),
+    { attack: 40, recovery: 20, growth: 50 });
 });
