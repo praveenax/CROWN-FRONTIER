@@ -223,3 +223,73 @@ test('rival armies navigate around water and stay within movement budgets', () =
   assert.ok(Math.abs(moved.x - enemy.x) + Math.abs(moved.y - enemy.y) <= 3);
   assert.notDeepEqual([moved.x, moved.y], [enemy.x, enemy.y]);
 });
+
+test('new armies can receive a level-one general, but scouts do not', () => {
+  let game = createGame(1);
+  const startingGeneral = game.armies[0].general;
+  assert.match(startingGeneral.name, /^\w+ \w+$/);
+  assert.equal(startingGeneral.level, 1);
+  assert.deepEqual(startingGeneral.skills, { fighting: 1, captain: 1, charisma: 1 });
+  game = moveUnit(game, 'army-1', 50, 49);
+  game.randomSeed = 0;
+  const withGeneral = recruit(game, 'london');
+  const general = withGeneral.armies.find(unit => unit.id === 'army-2').general;
+  assert.ok(general);
+  assert.notEqual(general.id, startingGeneral.id);
+  assert.notEqual(general.name, startingGeneral.name);
+  game.randomSeed = 1000;
+  assert.equal(recruit(game, 'london').armies.find(unit => unit.id === 'army-2').general, undefined);
+  game.randomSeed = 0;
+  assert.equal(recruit(game, 'london', 'scout').armies.find(unit => unit.id === 'army-2').general, undefined);
+
+  game = createGame(1);
+  game.randomSeed = 0;
+  const rival = endTurn(game).armies.find(unit => unit.owner === 'france' && unit.id !== 'enemy-0');
+  assert.ok(rival.general);
+});
+
+test('merges preserve either general and reject two generals', () => {
+  let game = createGame(1);
+  const general = game.armies[0].general;
+  const ally = { id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 60, units: 1, moves: 3 };
+  game.armies.push(ally);
+  let merged = moveUnit(game, 'army-1', 50, 49);
+  assert.deepEqual(merged.armies.find(unit => unit.id === 'ally').general, general);
+  assert.equal(game.armies[0].general.id, general.id);
+
+  ally.general = { id: 'other', name: 'Other General', level: 1, skills: { fighting: 1, captain: 1, charisma: 1 } };
+  assert.equal(moveUnit(game, 'army-1', 50, 49), game);
+  delete game.armies[0].general;
+  merged = moveUnit(game, 'army-1', 50, 49);
+  assert.equal(merged.armies.find(unit => unit.id === 'ally').general.id, 'other');
+});
+
+test('winning generals level and gain exactly one skill point without mutating previous state', () => {
+  const game = createGame(1);
+  const general = game.armies[0].general;
+  Object.assign(game.armies.find(unit => unit.owner === 'france'), { x: 50, y: 49, troops: 50 });
+  const next = moveUnit(game, 'army-1', 50, 49);
+  const winner = next.armies.find(unit => unit.id === 'army-1').general;
+  assert.equal(winner.level, 2);
+  assert.equal(Object.values(winner.skills).reduce((sum, value) => sum + value, 0), 4);
+  assert.deepEqual(general.skills, { fighting: 1, captain: 1, charisma: 1 });
+  assert.equal(general.level, 1);
+  assert.ok(next.log.some(entry => entry.includes('reached level 2')));
+  Object.assign(next.armies.find(unit => unit.owner === 'castile'), { x: 51, y: 49, troops: 10 });
+  const secondWin = moveUnit(next, 'army-1', 51, 49);
+  const veteran = secondWin.armies.find(unit => unit.id === 'army-1').general;
+  assert.equal(veteran.level, 3);
+  assert.equal(Object.values(veteran.skills).reduce((sum, value) => sum + value, 0), 5);
+  assert.equal(winner.level, 2);
+});
+
+test('a victorious defender levels up and the defeated general is removed', () => {
+  const game = createGame(1);
+  const enemy = game.armies.find(unit => unit.owner === 'france');
+  Object.assign(enemy, { x: 50, y: 49, troops: 120, general: { id: 'defender', name: 'Rival General', level: 1, skills: { fighting: 1, captain: 1, charisma: 1 } } });
+  const next = moveUnit(game, 'army-1', 50, 49);
+  assert.equal(next.armies.some(unit => unit.id === 'army-1'), false);
+  const general = next.armies.find(unit => unit.id === enemy.id).general;
+  assert.equal(general.level, 2);
+  assert.equal(Object.values(general.skills).reduce((sum, value) => sum + value, 0), 4);
+});

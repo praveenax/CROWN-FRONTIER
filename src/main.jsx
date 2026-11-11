@@ -41,6 +41,7 @@ function App() {
   const city = selected?.type === 'city' ? game.cities.find(c => c.id === selected.id) : null;
   const ownedCities = game.cities.filter(c => c.owner === 'england');
   const playerUnits = game.armies.filter(a => a.owner === 'england');
+  const generals = playerUnits.filter(a => a.general);
   const explored = Object.keys(game.discovered).length;
   const resources = game.resources.england;
 
@@ -103,6 +104,11 @@ function App() {
         setNotice(tile.terrain === 'water' ? 'Water cannot be crossed.' : 'Not enough movement to enter this mountain.');
         return;
       }
+      if (tile.occupant.owner === unit.owner && tile.occupant.general && unit.general) {
+        setSelected({ type: 'unit', id: tile.occupant.id });
+        setNotice('Armies with two generals cannot merge.');
+        return;
+      }
     }
     if (tile.occupant) setSelected({ type: 'unit', id: tile.occupant.id });
     else if (tile.place) setSelected({ type: 'city', id: tile.place.id });
@@ -148,6 +154,9 @@ function App() {
       <div className="sidebar-section"><div className="section-heading">YOUR FORCES <span>{String(playerUnits.length).padStart(2, '0')}</span></div>
         <div className="forces">{playerUnits.map(a => <button key={a.id} onClick={() => focusUnit(a)} className={`force-row ${unit?.id === a.id ? 'active' : ''}`}><span className="force-icon"><Icon name={a.kind === 'scout' ? 'eye' : 'sword'} size={16}/></span><span><strong>{a.name}</strong><small>{a.troops} {a.kind === 'scout' ? 'scouts' : 'soldiers'}</small></span><Icon name="chevron" size={15}/></button>)}</div>
       </div>
+      <div className="sidebar-section"><div className="section-heading">YOUR GENERALS <span>{String(generals.length).padStart(2, '0')}</span></div>
+        <div className="forces settlements" role="group" aria-label="Your generals">{generals.length ? generals.map(army => <button key={army.general.id} onClick={() => focusUnit(army)} aria-pressed={unit?.general?.id === army.general.id} className={`force-row ${unit?.general?.id === army.general.id ? 'active' : ''}`}><span className="force-icon"><Icon name="crown" size={16}/></span><span><strong>{army.general.name}</strong><small>Level {army.general.level} · {army.name} ({army.x + 1}, {army.y + 1})</small></span><Icon name="chevron" size={15}/></button>) : <div className="settlements-empty">No generals in service</div>}</div>
+      </div>
       <div className="sidebar-bottom"><span className="status-dot"/> CAMPAIGN IN PROGRESS <small>Prototype · v0.1</small></div>
     </aside>
 
@@ -171,7 +180,7 @@ function App() {
           </section>
           <aside className="right-column">
             <section className="detail-panel"><div className="detail-heading"><span>SELECTED</span><Icon name="crosshair" size={16}/></div>
-              {unit ? <><div className="selection-icon"><Icon name={unit.kind === 'scout' ? 'eye' : 'sword'} size={26}/></div><div className="selection-tag">{unit.owner === 'england' ? 'YOUR FORCES' : KINGDOMS[unit.owner].name.toUpperCase()}</div><h2>{unit.name}</h2><p>{unit.kind === 'scout' ? 'A light-footed party, ready to reveal the unknown.' : `A host of ${unit.units} / 5 merged units, with room for up to 300 soldiers.`}</p><div className="detail-stats"><div><small>STRENGTH</small><b>{unit.troops} <span>{unit.kind === 'scout' ? 'scouts' : 'soldiers'}</span></b></div><div><small>MOVEMENT</small><b>{unit.moves} <span>/ 3 points</span></b></div></div>{unit.owner === 'england' && <div className="instruction"><span>✦</span> {autoplay ? 'Autoplay is issuing orders. Pause to move your units manually.' : 'Move onto a friendly army to merge. Water blocks movement; mountains cost 2 points.'}</div>}{game.cities.some(c => c.x === unit.x && c.y === unit.y) && <button className="secondary-button" onClick={() => setSelected({ type: 'city', id: game.cities.find(c => c.x === unit.x && c.y === unit.y).id })}>View settlement <span>→</span></button>}</>
+              {unit ? <><div className="selection-icon"><Icon name={unit.kind === 'scout' ? 'eye' : 'sword'} size={26}/></div><div className="selection-tag">{unit.owner === 'england' ? 'YOUR FORCES' : KINGDOMS[unit.owner].name.toUpperCase()}</div><h2>{unit.name}</h2><p>{unit.kind === 'scout' ? 'A light-footed party, ready to reveal the unknown.' : `A host of ${unit.units} / 5 merged units, with room for up to 300 soldiers.`}</p><div className="detail-stats"><div><small>STRENGTH</small><b>{unit.troops} <span>{unit.kind === 'scout' ? 'scouts' : 'soldiers'}</span></b></div><div><small>MOVEMENT</small><b>{unit.moves} <span>/ 3 points</span></b></div></div>{unit.general ? <div className="general-detail"><div className="general-heading"><span>GENERAL</span><span>LEVEL {unit.general.level}</span></div><strong>{unit.general.name}</strong><div className="general-skills">{Object.entries(unit.general.skills).map(([skill, value]) => <div key={skill}><small>{skill}</small><b>{value}</b></div>)}</div><small className="general-hint">Skills do not affect combat yet.</small></div> : unit.kind === 'army' && <div className="general-detail"><div className="general-heading">NO GENERAL ASSIGNED</div></div>}{unit.owner === 'england' && <div className="instruction"><span>✦</span> {autoplay ? 'Autoplay is issuing orders. Pause to move your units manually.' : 'Move onto a friendly army to merge. Two generals cannot merge. Water blocks movement; mountains cost 2 points.'}</div>}{game.cities.some(c => c.x === unit.x && c.y === unit.y) && <button className="secondary-button" onClick={() => setSelected({ type: 'city', id: game.cities.find(c => c.x === unit.x && c.y === unit.y).id })}>View settlement <span>→</span></button>}</>
                 : city ? <><div className="selection-icon"><Icon name="flag" size={26}/></div><div className="selection-tag">{city.owner ? KINGDOMS[city.owner].name.toUpperCase() : 'NEUTRAL SETTLEMENT'}</div><h2>{city.name}</h2><p>{city.owner === 'england' ? 'A settlement under your banner. It produces resources each turn.' : 'Send an army here to claim this settlement for your kingdom.'}</p><div className="detail-stats"><div><small>POSITION</small><b>{city.x + 1}, {city.y + 1}</b></div><div><small>STATUS</small><b>{city.capital ? 'Capital' : 'Town'}</b></div></div>{city.owner === 'england' && <><button className="secondary-button" disabled={autoplay} onClick={() => doRecruit('army')}>Raise army <span>60 gold · 40 food · 60 people</span></button><button className="secondary-button" disabled={autoplay} onClick={() => doRecruit('scout')}>Recruit scouts <span>30 gold · 15 food · 20 people</span></button><small className="recruit-hint">The city tile must be unoccupied. New units move next turn.</small></>}</>
                   : <><div className="selection-icon"><Icon name="crosshair" size={26}/></div><div className="selection-tag">AWAITING ORDERS</div><h2>Choose your next move</h2><p>Select an army or a settlement on the map to see its details and available actions.</p></>}
               {notice && <div className="notice" role="alert">{notice}</div>}

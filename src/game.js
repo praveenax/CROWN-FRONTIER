@@ -11,6 +11,9 @@ export const KINGDOMS = {
 };
 
 const cityNames = ['Ashford', 'Westhaven', 'Oakheart', 'Rivermouth', 'Stonebridge', 'Highmere', 'Dunwich', 'Eldham', 'Northwatch', 'Rosehaven', 'Whitmoor', 'Greenford', 'Fairhaven', 'Thornfield', 'Bracken', 'Redwater', 'Kingswell', 'Alderwick', 'Greyford', 'Eastmere', 'Millhaven', 'Foxhollow', 'Westerly', 'Pinehurst', 'Blackmere', 'Hawkridge', 'Larkspur', 'Goldcrest', 'Havenwood', 'Briarfield', 'Longford', 'Winterfell'];
+const firstNames = ['Alden', 'Beatrice', 'Cedric', 'Diana', 'Edmund', 'Freya', 'Gareth', 'Helena', 'Isabel', 'Jonas', 'Leona', 'Rowan', 'Matilda', 'Oswald', 'Elise', 'Victor'];
+const lastNames = ['Ashford', 'Blackwood', 'Caldwell', 'Drake', 'Fairfax', 'Hawthorne', 'Langley', 'Mercer', 'Northwood', 'Ravenscroft', 'Sterling', 'Thorne', 'Valen', 'Westbrook', 'Wilder', 'York'];
+const generalSkills = ['fighting', 'captain', 'charisma'];
 const key = (x, y) => `${x},${y}`;
 const distance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -42,7 +45,25 @@ function revealPlayer(state) {
   for (const army of state.armies) if (army.owner === 'england') reveal(state.discovered, army.x, army.y, army.kind === 'scout' ? 3 : 2);
 }
 
-export function createGame() {
+function randomInt(state, max) {
+  state.randomSeed = (Math.imul(state.randomSeed, 1664525) + 1013904223) >>> 0;
+  return Math.floor(state.randomSeed / 4294967296 * max);
+}
+
+function createGeneral(state) {
+  const usedNames = new Set(state.armies.filter(army => army.general).map(army => army.general.name));
+  const combinations = firstNames.length * lastNames.length;
+  const start = randomInt(state, combinations);
+  let name;
+  for (let offset = 0; offset < combinations; offset++) {
+    const index = (start + offset) % combinations;
+    name = `${firstNames[Math.floor(index / lastNames.length)]} ${lastNames[index % lastNames.length]}`;
+    if (!usedNames.has(name)) break;
+  }
+  return { id: `general-${state.nextGeneralId++}`, name, level: 1, skills: { fighting: 1, captain: 1, charisma: 1 } };
+}
+
+export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
   const cities = [
     { id: 'london', name: 'London', x: 49, y: 49, owner: 'england', capital: true },
     { id: 'paris', name: 'Paris', x: 20, y: 22, owner: 'france', capital: true },
@@ -76,8 +97,11 @@ export function createGame() {
     resources: Object.fromEntries(Object.keys(KINGDOMS).map(owner => [owner, { gold: 180, food: 150, population: 1200 }])),
     discovered: {},
     nextId: 2,
+    nextGeneralId: 1,
+    randomSeed: seed >>> 0,
     log: ['A new chapter begins. Your kingdom awaits.'],
   };
+  state.armies[0].general = createGeneral(state);
   revealPlayer(state);
   return state;
 }
@@ -90,7 +114,7 @@ function copyState(state) {
   return {
     ...state,
     cities: state.cities.map(city => ({ ...city })),
-    armies: state.armies.map(army => ({ ...army })),
+    armies: state.armies.map(army => ({ ...army, ...(army.general ? { general: { ...army.general, skills: { ...army.general.skills } } } : {}) })),
     resources: Object.fromEntries(Object.entries(state.resources).map(([owner, resources]) => [owner, { ...resources }])),
     discovered: { ...state.discovered },
     log: [...state.log],
@@ -110,8 +134,15 @@ function resolveArrival(state, army) {
     const loser = attackerWins ? enemy : army;
     winner.troops = Math.max(1, winner.troops - loser.troops);
     state.armies = state.armies.filter(unit => unit.id !== loser.id);
-    if (army.owner === 'england' || enemy.owner === 'england' || isDiscovered(state, army.x, army.y)) {
+    const visible = army.owner === 'england' || enemy.owner === 'england' || isDiscovered(state, army.x, army.y);
+    if (visible) {
       addLog(state, `${winner.name} defeated ${loser.name} near ${army.x + 1}, ${army.y + 1}.`);
+    }
+    if (winner.general) {
+      const skill = generalSkills[randomInt(state, generalSkills.length)];
+      winner.general.level++;
+      winner.general.skills[skill]++;
+      if (visible) addLog(state, `${winner.general.name} reached level ${winner.general.level} (+1 ${skill}).`);
     }
     if (!attackerWins) return;
   }
@@ -124,6 +155,7 @@ function resolveArrival(state, army) {
 
 export function canMerge(unit, other) {
   return unit.owner === other.owner && unit.kind === 'army' && other.kind === 'army'
+    && !(unit.general && other.general)
     && unit.troops + other.troops <= MAX_TROOPS && unit.units + other.units <= MAX_MERGED_UNITS;
 }
 
@@ -148,6 +180,7 @@ function moveForOwner(state, id, x, y, owner) {
     ally.troops += moving.troops;
     ally.units += moving.units;
     ally.moves = Math.min(ally.moves, moving.moves);
+    if (moving.general) ally.general = moving.general;
     next.armies = next.armies.filter(other => other.id !== id);
     if (owner === 'england' || isDiscovered(next, x, y)) addLog(next, `${moving.name} merged into ${ally.name} (${ally.troops} soldiers).`);
     revealPlayer(next);
@@ -173,7 +206,9 @@ function recruitForOwner(state, cityId, owner, kind = 'army') {
   if (!city || !['army', 'scout'].includes(kind) || state.armies.some(army => army.x === city.x && army.y === city.y) || Object.entries(cost).some(([resource, amount]) => resources[resource] < amount)) return state;
   const next = copyState(state);
   for (const [resource, amount] of Object.entries(cost)) next.resources[owner][resource] -= amount;
-  next.armies.push({ id: `army-${next.nextId++}`, name: kind === 'scout' ? 'Rangers' : owner === 'england' ? 'New Levy' : `${KINGDOMS[owner].name} levy`, owner, kind, x: city.x, y: city.y, troops: kind === 'scout' ? 20 : 60, units: 1, moves: 0 });
+  const army = { id: `army-${next.nextId++}`, name: kind === 'scout' ? 'Rangers' : owner === 'england' ? 'New Levy' : `${KINGDOMS[owner].name} levy`, owner, kind, x: city.x, y: city.y, troops: kind === 'scout' ? 20 : 60, units: 1, moves: 0 };
+  if (kind === 'army' && randomInt(next, 2) === 0) army.general = createGeneral(next);
+  next.armies.push(army);
   if (owner === 'england' || isDiscovered(next, city.x, city.y)) addLog(next, `${kind === 'scout' ? 'Scouts recruited' : 'Army raised'} in ${city.name}. Ready next turn.`);
   revealPlayer(next);
   return next;
