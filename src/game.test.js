@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { autoplayStep, buildBuilding, cameraFor, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, moveCamera, moveUnit, recruit, terrainAt, VIEW_SIZE } from './game.js';
+import { autoplayStep, buildBuilding, cameraFor, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, moveCamera, moveUnit, recruit, terrainAt, VIEW_SIZE } from './game.js';
 
 test('creates the world with four kingdoms, fog, and a bounded viewport', () => {
   const game = createGame();
@@ -644,4 +644,65 @@ test('victory and defeat end the campaign and block further turns and orders', (
   const defeat = endTurn(game);
   assert.equal(defeat.gameOver.outcome, 'defeat');
   assert.equal(endTurn(defeat), defeat);
+});
+
+test('one operation links the actual order, battle, breach, capture and general history', () => {
+  const game = createGame(12);
+  const general = game.armies[0].general;
+  Object.assign(game.armies[0], { x: 52, y: 48, troops: 120 });
+  const city = game.cities.find(place => place.id === 'ashford');
+  city.owner = 'france';
+  city.defense = 20;
+  const enemy = game.armies.find(unit => unit.owner === 'france');
+  Object.assign(enemy, { x: 52, y: 47, troops: 60, general: { id: 'enemy-general', name: 'Evelyn Other', level: 1, skills: { fighting: 1, captain: 1, charisma: 1 } } });
+
+  const next = moveUnit(game, 'army-1', 52, 47);
+  const related = next.log.filter(entry => entry.includes('[operation-1]'));
+  assert.ok(related.some(entry => entry.includes('Manual move to (53, 48)') && entry.includes(`${general.name} [${general.id}]`) && entry.includes('120 troops')));
+  assert.ok(related.some(entry => entry.includes('120 vs 60') && entry.includes('Attacker survivors: 60')));
+  assert.ok(related.some(entry => entry.includes('60 vs 20') && entry.includes('40 troops remaining')));
+  assert.ok(related.some(entry => entry.includes('claimed Ashford') && entry.includes('Survivors: 40') && entry.includes('Future production belongs to the new owner')));
+  assert.ok(related.some(entry => entry.includes(`${KINGDOMS.england.name}'s first conquest`)));
+  assert.ok(related.some(entry => entry.includes('enemy-general') && entry.includes('was lost')));
+  assert.ok(next.generalHistory[general.id].events.some(event => event.includes('won battle')));
+  assert.ok(next.generalHistory[general.id].events.some(event => event.includes('promoted')));
+  assert.ok(next.generalHistory[general.id].events.some(event => event.includes('captured Ashford [ashford]')));
+  assert.ok(next.generalHistory['enemy-general'].events.some(event => event.includes('defeated and lost')));
+  assert.deepEqual(game.generalHistory[general.id].events, []);
+});
+
+test('ownership history distinguishes settlements and tracks occupation length across captures', () => {
+  let game = createGame(12);
+  const city = game.cities.find(place => place.id === 'ashford');
+  Object.assign(game.armies[0], { x: 52, y: 48, troops: 120 });
+  game = moveUnit(game, 'army-1', 52, 47);
+  assert.deepEqual(game.cities.find(place => place.id === city.id).ownershipHistory.map(entry => entry.owner), [null, 'england']);
+  const original = game;
+  game.turn = 5;
+  game.armies = game.armies.filter(unit => unit.owner === 'england');
+  game.cities.forEach(place => { if (place.owner === 'france') place.owner = null; });
+  game.armies.push({ id: 'rival', name: 'Rival', owner: 'france', kind: 'army', x: 53, y: 47, troops: 300, maxTroops: 300, units: 1, moves: 3 });
+  game = endTurn(game);
+  const captured = game.cities.find(place => place.id === city.id);
+  assert.equal(captured.owner, 'france');
+  assert.deepEqual(captured.ownershipHistory.map(entry => entry.owner), [null, 'england', 'france']);
+  assert.ok(game.log.some(entry => entry.includes('claimed Ashford') && entry.includes('ownership changes: 2') && entry.includes('Previous occupation: 5 completed turns')));
+  assert.equal(original.cities.find(place => place.id === city.id).ownershipHistory.length, 2);
+});
+
+test('autoplay logs its chosen objective and condensed chronicle retains major events', () => {
+  let game = createGame(12);
+  game.cities.find(city => city.id === 'london').owner = null;
+  const enemy = game.armies.find(unit => unit.owner === 'france');
+  Object.assign(enemy, { x: 50, y: 49, troops: 50 });
+  game = autoplayStep(game).state;
+  assert.ok(game.log.some(entry => entry.includes(`AI objective: Engage ${enemy.name} [${enemy.id}]`)));
+  const events = [
+    { turn: 1, category: 'recovery', text: 'Turn 1: recovery two' },
+    { turn: 1, category: 'recruitment', text: 'Turn 1: recruited' },
+    { turn: 1, category: 'recovery', text: 'Turn 1: recovery one' },
+    { turn: 1, category: 'major', text: 'Turn 1: a capital fell' },
+  ];
+  assert.deepEqual(chronicleEntries(events), ['Turn 1: a capital fell', 'Turn 1: 2 recovery events.', 'Turn 1: recruited']);
+  assert.deepEqual(chronicleEntries(events, false), events.map(event => event.text).reverse());
 });

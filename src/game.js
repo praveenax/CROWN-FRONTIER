@@ -164,6 +164,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
       city.defense = cityDevelopment(city).defense;
     }
   }
+  for (const city of cities) city.ownershipHistory = [{ owner: city.owner, sinceTurn: 1 }];
   const armies = [
     { id: 'army-1', name: 'Royal Guard', owner: 'england', kind: 'army', x: 49, y: 49, troops: 120, maxTroops: 120, units: 1, moves: MOVE_RANGE },
     ...['france', 'castile', 'norway'].map((owner, index) => {
@@ -180,11 +181,15 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
     discovered: {},
     nextId: 2,
     nextGeneralId: 1,
+    nextOperationId: 1,
     randomSeed: seed >>> 0,
     log: [],
+    logEvents: [],
+    generalHistory: {},
     gameOver: null,
   };
   state.armies[0].general = createGeneral(state);
+  rememberGeneral(state, state.armies[0].general);
   const rulerRandom = { randomSeed: (seed ^ 0x9e3779b9) >>> 0 };
   const usedNames = new Set([state.armies[0].general.name]);
   for (const owner of KINGDOM_OWNERS) {
@@ -196,7 +201,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
   for (const city of cities.filter(place => place.capital)) {
     addLog(state, `${KINGDOMS[city.owner].name} established its capital at ${city.name} (${city.x + 1}, ${city.y + 1}), ruled by ${state.rulers[city.owner]}.`);
   }
-  addLog(state, `${state.armies[0].general.name} leads the Royal Guard in ${cities.find(city => city.id === 'london').name}.`);
+  addLog(state, `${state.armies[0].general.name} [${state.armies[0].general.id}] leads the Royal Guard in ${cityLabel(cities.find(city => city.id === 'london'))}.`);
   revealPlayer(state);
   return state;
 }
@@ -213,11 +218,61 @@ function copyState(state) {
     resources: Object.fromEntries(Object.entries(state.resources).map(([owner, resources]) => [owner, { ...resources }])),
     discovered: { ...state.discovered },
     log: [...state.log],
+    logEvents: [...state.logEvents],
+    generalHistory: { ...state.generalHistory },
   };
 }
 
-function addLog(state, message) {
-  state.log.unshift(`Turn ${state.turn}: ${message}`);
+function addLog(state, message, category = 'major') {
+  const text = `Turn ${state.turn}: ${message}`;
+  state.log.unshift(text);
+  state.logEvents.unshift({ turn: state.turn, category, text });
+}
+
+export function chronicleEntries(events, condensed = true) {
+  const result = [];
+  let groups = new Map();
+  for (const event of [...events].reverse()) {
+    if (condensed && event.category !== 'major') {
+      const key = `${event.turn}:${event.category}`;
+      const group = groups.get(key);
+      if (group) {
+        group.count++;
+        group.text = `Turn ${event.turn}: ${group.count} ${event.category} events.`;
+      } else {
+        const entry = { ...event, count: 1 };
+        groups.set(key, entry);
+        result.push(entry);
+      }
+    } else {
+      result.push({ ...event, count: 1 });
+      groups = new Map();
+    }
+  }
+  return result.map(entry => entry.text);
+}
+
+function rememberGeneral(state, general, event) {
+  if (!general) return;
+  const previous = state.generalHistory[general.id];
+  state.generalHistory[general.id] = {
+    id: general.id,
+    name: general.name,
+    events: event ? [...(previous?.events || []), `Turn ${state.turn}: ${event}`] : (previous?.events || []),
+  };
+}
+
+function generalLabel(general) {
+  return general ? `${general.name} [${general.id}]` : 'No general';
+}
+
+function generalPast(state, general) {
+  const events = general && state.generalHistory[general.id]?.events;
+  return events?.length ? events.slice(-3).join(' | ') : 'No previous recorded actions';
+}
+
+function cityLabel(city) {
+  return `${city.name} [${city.id}]`;
 }
 
 function updateGameOver(state) {
@@ -243,16 +298,25 @@ function changePopulation(state, city, population) {
   }
 }
 
-function promoteGeneral(state, army) {
+function promoteGeneral(state, army, operationId) {
   if (!army.general) return;
   const skill = generalSkills[randomInt(state, generalSkills.length)];
   army.general.level++;
   army.general.skills[skill]++;
-  addLog(state, `${army.general.name} reached level ${army.general.level} (+1 ${skill}).`);
+  const event = `promoted to level ${army.general.level} (+1 ${skill}) in ${operationId}`;
+  rememberGeneral(state, army.general, event);
+  addLog(state, `${army.general.name} reached level ${army.general.level} (+1 ${skill}). General ID: ${army.general.id}; operation: ${operationId}.`);
 }
 
-function resolveArrival(state, army) {
+function resolveArrival(state, army, objective) {
   const enemy = state.armies.find(other => other.id !== army.id && other.owner !== army.owner && other.x === army.x && other.y === army.y);
+  const city = state.cities.find(place => place.x === army.x && place.y === army.y);
+  const enteringCity = city && city.owner !== army.owner && (city.owner || army.kind === 'army');
+  if (!enemy && !enteringCity) return;
+  const operationId = `operation-${state.nextOperationId++}`;
+  const location = city ? cityLabel(city) : `(${army.x + 1}, ${army.y + 1})`;
+  const category = army.owner === 'barbarian' && city && !city.capital && !enemy?.general ? 'raid' : 'major';
+  addLog(state, `[${operationId}] ${army.name} [${army.id}] begins action at ${location}: ${army.troops} troops; commander: ${generalLabel(army.general)}. ${objective}. Commander history: ${generalPast(state, army.general)}.${enemy?.general ? ` Opposing commander: ${generalLabel(enemy.general)}. History: ${generalPast(state, enemy.general)}.` : ''}`, category);
   if (enemy) {
     const attackerStrength = army.troops;
     const defenderStrength = enemy.troops;
@@ -261,26 +325,30 @@ function resolveArrival(state, army) {
     const loser = attackerWins ? enemy : army;
     winner.troops = Math.max(1, winner.troops - loser.troops);
     state.armies = state.armies.filter(unit => unit.id !== loser.id);
-    const city = state.cities.find(place => place.x === army.x && place.y === army.y);
     const describe = unit => `${unit.name} [${KINGDOMS[unit.owner].name}]${unit.general ? ` (General ${unit.general.name})` : ''}`;
-    addLog(state, `${describe(army)} attacked ${describe(enemy)} at ${city ? `${city.name} ` : ''}(${army.x + 1}, ${army.y + 1}): ${attackerStrength} vs ${defenderStrength}. ${describe(winner)} defeated ${describe(loser)} with ${winner.troops} remaining; ${loser.general ? `General ${loser.general.name} was lost.` : 'the defeated force was destroyed.'}`);
-    promoteGeneral(state, winner);
+    addLog(state, `${describe(army)} attacked ${describe(enemy)} at ${city ? `${city.name} ` : ''}(${army.x + 1}, ${army.y + 1}): ${attackerStrength} vs ${defenderStrength}. ${describe(winner)} defeated ${describe(loser)} with ${winner.troops} remaining; ${loser.general ? `General ${loser.general.name} was lost.` : 'the defeated force was destroyed.'} [${operationId}] Attacker survivors: ${attackerWins ? army.troops : 0}; defender survivors: ${attackerWins ? 0 : enemy.troops}.${city ? ` Settlement: ${cityLabel(city)}.` : ''}`, category);
+    rememberGeneral(state, winner.general, `won battle at ${location} in ${operationId}, ${winner.troops} survivors`);
+    rememberGeneral(state, loser.general, `defeated and lost at ${location} in ${operationId}`);
+    if (loser.general) addLog(state, `[${operationId}] General ${generalLabel(loser.general)} was lost at ${location}. History: ${generalPast(state, loser.general)}.`);
+    promoteGeneral(state, winner, operationId);
     if (!attackerWins) return;
   }
-  const city = state.cities.find(place => place.x === army.x && place.y === army.y);
   if (city && city.owner !== army.owner && (city.owner || army.kind === 'army') && city.defense > 0) {
     const strength = army.troops;
     const defense = city.defense;
     if (strength <= defense) {
       city.defense = Math.max(1, defense - strength);
       state.armies = state.armies.filter(unit => unit.id !== army.id);
-      addLog(state, `${army.name} [${KINGDOMS[army.owner].name}] attacked ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}. The city held with ${city.defense} defense remaining${army.general ? `; General ${army.general.name} was lost` : ''}.`);
+      addLog(state, `${army.name} [${KINGDOMS[army.owner].name}] attacked ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}. The city held with ${city.defense} defense remaining${army.general ? `; General ${army.general.name} was lost` : ''}. [${operationId}] Attacker survivors: 0; settlement: ${cityLabel(city)}.`, category);
+      rememberGeneral(state, army.general, `defeated and lost attacking defenses at ${cityLabel(city)} in ${operationId}`);
+      if (army.general) addLog(state, `[${operationId}] General ${generalLabel(army.general)} was lost at ${cityLabel(city)}. History: ${generalPast(state, army.general)}.`);
       return;
     }
     army.troops -= defense;
     city.defense = 0;
-    addLog(state, `${army.name} [${KINGDOMS[army.owner].name}] breached ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}, with ${army.troops} troops remaining.`);
-    promoteGeneral(state, army);
+    addLog(state, `${army.name} [${KINGDOMS[army.owner].name}] breached ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}, with ${army.troops} troops remaining. [${operationId}] Settlement: ${cityLabel(city)}.`, category);
+    rememberGeneral(state, army.general, `breached defenses at ${cityLabel(city)} in ${operationId}, ${army.troops} survivors`);
+    promoteGeneral(state, army, operationId);
   }
   if (city?.owner && army.owner === 'barbarian') {
     const resources = state.resources[city.owner];
@@ -288,14 +356,21 @@ function resolveArrival(state, army) {
     resources.gold = Math.max(0, resources.gold - 30);
     resources.food = Math.max(0, resources.food - 20);
     changePopulation(state, city, city.population - lost.population);
-    addLog(state, `Barbarians raided ${city.name} (${city.x + 1}, ${city.y + 1}), owned by ${KINGDOMS[city.owner].name}, costing ${lost.gold} gold, ${lost.food} food and ${lost.population} population.`);
+    addLog(state, `Barbarians raided ${city.name} (${city.x + 1}, ${city.y + 1}), owned by ${KINGDOMS[city.owner].name}, costing ${lost.gold} gold, ${lost.food} food and ${lost.population} population. [${operationId}] ${cityLabel(city)} remains under ${KINGDOMS[city.owner].name}.`, category);
     state.armies = state.armies.filter(unit => unit.id !== army.id);
     return;
   }
   if (city && city.owner !== army.owner && army.kind === 'army') {
     const previousOwner = city.owner;
+    const history = city.ownershipHistory || [{ owner: previousOwner, sinceTurn: null }];
+    const previousOccupation = history[history.length - 1];
+    const firstConquest = !state.cities.some(place => place.ownershipHistory?.slice(1).some(entry => entry.owner === army.owner));
     city.owner = army.owner;
-    addLog(state, `${KINGDOMS[army.owner].name} claimed ${city.name} (${city.x + 1}, ${city.y + 1})${previousOwner ? ` from ${KINGDOMS[previousOwner].name}` : ''}.`);
+    city.ownershipHistory = [...history, { owner: army.owner, sinceTurn: state.turn }];
+    const owners = city.ownershipHistory.map(entry => entry.owner ? KINGDOMS[entry.owner].name : 'Neutral').join(' → ');
+    const duration = previousOccupation.sinceTurn === null ? 'duration unknown' : `${state.turn - previousOccupation.sinceTurn} completed turns`;
+    addLog(state, `${KINGDOMS[army.owner].name} claimed ${city.name} (${city.x + 1}, ${city.y + 1})${previousOwner ? ` from ${KINGDOMS[previousOwner].name}` : ''}. [${operationId}] ${cityLabel(city)}${city.capital ? ' is a capital' : ' is a town'}; now controlled by ${KINGDOMS[army.owner].name}.${firstConquest ? ` This is ${KINGDOMS[army.owner].name}'s first conquest.` : ''} Previous occupation: ${duration}; ownership changes: ${city.ownershipHistory.length - 1}; history: ${owners}. ${city.population} population and buildings remain; defense: ${city.defense}. Future production belongs to the new owner; treasury and rulers are unchanged. Survivors: ${army.troops}; commander: ${generalLabel(army.general)}.`);
+    rememberGeneral(state, army.general, `captured ${cityLabel(city)} in ${operationId}, ${army.troops} survivors`);
   }
 }
 
@@ -313,7 +388,7 @@ export function canMoveUnit(state, unit, x, y) {
   return !other || other.owner !== unit.owner || canMerge(unit, other);
 }
 
-function moveForOwner(state, id, x, y, owner) {
+function moveForOwner(state, id, x, y, owner, objective = `Manual move to (${x + 1}, ${y + 1})`) {
   const unit = state.armies.find(army => army.id === id && army.owner === owner);
   if (!canMoveUnit(state, unit, x, y)) return state;
   const next = copyState(state);
@@ -321,6 +396,7 @@ function moveForOwner(state, id, x, y, owner) {
   moving.x = x;
   moving.y = y;
   moving.moves -= terrainAt(x, y) === 'mountain' ? 2 : 1;
+  addLog(next, `${moving.name} [${moving.id}; ${KINGDOMS[owner].name}] moved from (${unit.x + 1}, ${unit.y + 1}) to (${x + 1}, ${y + 1}) with ${moving.troops} troops. ${objective}.`, 'movement');
   const ally = next.armies.find(other => other.id !== id && other.owner === owner && other.x === x && other.y === y);
   if (ally) {
     ally.troops += moving.troops;
@@ -333,7 +409,7 @@ function moveForOwner(state, id, x, y, owner) {
     revealPlayer(next);
     return next;
   }
-  resolveArrival(next, moving);
+  resolveArrival(next, moving, objective);
   if (owner === 'barbarian' && next.armies.some(army => army.id === id)
     && !isDiscovered(state, unit.x, unit.y) && isDiscovered(next, x, y)) {
     addLog(next, `Barbarian raiders sighted near ${x + 1}, ${y + 1}.`);
@@ -342,9 +418,9 @@ function moveForOwner(state, id, x, y, owner) {
   return next;
 }
 
-export function moveUnit(state, id, x, y) {
+export function moveUnit(state, id, x, y, objective) {
   if (state.gameOver) return state;
-  const next = moveForOwner(state, id, x, y, 'england');
+  const next = moveForOwner(state, id, x, y, 'england', objective);
   if (next !== state) updateGameOver(next);
   return next;
 }
@@ -376,9 +452,12 @@ function recruitForOwner(state, cityId, owner, kind = 'army', allowAdjacent = fa
   const recruitingCity = next.cities.find(place => place.id === cityId);
   changePopulation(next, recruitingCity, recruitingCity.population - cost.population);
   const army = { id: `army-${next.nextId++}`, name: kind === 'scout' ? 'Rangers' : owner === 'england' ? 'New Levy' : `${KINGDOMS[owner].name} levy`, owner, kind, x: position.x, y: position.y, troops: kind === 'scout' ? 20 : 60, ...(kind === 'army' ? { maxTroops: 60 } : {}), units: 1, moves: 0 };
-  if (kind === 'army' && randomInt(next, 2) === 0) army.general = createGeneral(next);
+  if (kind === 'army' && randomInt(next, 2) === 0) {
+    army.general = createGeneral(next);
+    rememberGeneral(next, army.general);
+  }
   next.armies.push(army);
-  addLog(next, `${KINGDOMS[owner].name}: ${kind === 'scout' ? 'Scouts recruited' : 'Army raised'} in ${city.name}${army.general ? ` under General ${army.general.name}` : ''}. Ready next turn.`);
+  addLog(next, `${KINGDOMS[owner].name}: ${kind === 'scout' ? 'Scouts recruited' : 'Army raised'} in ${city.name}${army.general ? ` under General ${army.general.name} [${army.general.id}]` : ''}. Ready next turn. City: ${cityLabel(city)}; unit: ${army.id}; cost: ${cost.gold} gold, ${cost.food} food, ${cost.population} population.`, 'recruitment');
   revealPlayer(next);
   return next;
 }
@@ -417,7 +496,7 @@ function enemyTurn(state, owner) {
       if (!unit || unit.moves < 1 || isGarrison(next, unit)) break;
       const step = chooseAutoStep(next, unit, false);
       if (!step) break;
-      const moved = moveForOwner(next, id, step.x, step.y, owner);
+      const moved = moveForOwner(next, id, step.x, step.y, owner, step.objective);
       if (moved === next) break;
       next = moved;
     }
@@ -477,7 +556,9 @@ function barbarianTurn(state) {
         if (options.length) step = options[randomInt(next, options.length)];
       }
       if (!step) break;
-      next = moveForOwner(next, id, step.x, step.y, 'barbarian');
+      const target = step.target && targets.find(city => city.x === step.target.x && city.y === step.target.y);
+      const objective = target ? `AI objective: Raid ${cityLabel(target)}` : 'AI objective: Wander; no settlement within range';
+      next = moveForOwner(next, id, step.x, step.y, 'barbarian', objective);
     }
   }
   return next;
@@ -493,6 +574,7 @@ export function endTurn(state) {
       const development = cityDevelopment(city);
       next.resources[city.owner].gold += development.gold;
       next.resources[city.owner].food += development.food;
+      addLog(next, `${cityLabel(city)} [${KINGDOMS[city.owner].name}] produced ${development.gold} gold and ${development.food} food and grew by ${development.growth} population.`, 'production');
       changePopulation(next, city, city.population + development.growth);
     }
     city.defense = cityDevelopment(city).defense;
@@ -502,7 +584,7 @@ export function endTurn(state) {
     const recovered = Math.min(Math.ceil(army.maxTroops * 0.1), army.maxTroops - army.troops);
     army.troops += recovered;
     const city = next.cities.find(place => place.owner === army.owner && place.x === army.x && place.y === army.y);
-    addLog(next, `${army.name} [${KINGDOMS[army.owner].name}] recovered ${recovered} soldiers in ${city.name} (${army.troops}/${army.maxTroops}).`);
+    addLog(next, `${army.name} [${KINGDOMS[army.owner].name}] recovered ${recovered} soldiers in ${city.name} (${army.troops}/${army.maxTroops}). Unit: ${army.id}; settlement: ${cityLabel(city)}.`, 'recovery');
   }
   for (const owner of ['france', 'castile', 'norway']) next = enemyTurn(next, owner);
   next = barbarianTurn(next);
@@ -519,7 +601,7 @@ function findAutoStep(state, unit, isTarget, mergeTargets = new Set()) {
   const queue = [{ x: unit.x, y: unit.y, first: null }];
   for (let index = 0; index < queue.length; index++) {
     const current = queue[index];
-    if (current.first && isTarget(current.x, current.y)) return current.first;
+    if (current.first && isTarget(current.x, current.y)) return { ...current.first, target: { x: current.x, y: current.y } };
     for (const [dx, dy] of [[1, 0], [0, -1], [-1, 0], [0, 1]]) {
       const x = current.x + dx;
       const y = current.y + dy;
@@ -548,11 +630,25 @@ function chooseAutoStep(state, unit, player) {
   const unguardedPositions = positions(unguarded);
   const allyPositions = positions(allies);
   const townPositions = positions(towns);
-  return (unguarded.length && findAutoStep(state, unit, (x, y) => unguardedPositions.has(key(x, y))))
-    || (enemies.length && findAutoStep(state, unit, (x, y) => enemyPositions.has(key(x, y))))
-    || (allies.length && findAutoStep(state, unit, (x, y) => allyPositions.has(key(x, y)), new Set(allies.map(ally => ally.id))))
-    || (towns.length && findAutoStep(state, unit, (x, y) => townPositions.has(key(x, y))))
-    || (player && findAutoStep(state, unit, (x, y) => !isDiscovered(state, x, y)));
+  const choices = [
+    { items: unguarded, positions: unguardedPositions, describe: city => `Defend ${cityLabel(city)}` },
+    { items: enemies, positions: enemyPositions, describe: enemy => `Engage ${enemy.name} [${enemy.id}]` },
+    { items: allies, positions: allyPositions, describe: ally => `Merge with ${ally.name} [${ally.id}]`, mergeTargets: new Set(allies.map(ally => ally.id)) },
+    { items: towns, positions: townPositions, describe: city => `Claim ${cityLabel(city)}` },
+  ];
+  for (const choice of choices) {
+    if (!choice.items.length) continue;
+    const step = findAutoStep(state, unit, (x, y) => choice.positions.has(key(x, y)), choice.mergeTargets);
+    if (step) {
+      const target = choice.items.find(item => item.x === step.target.x && item.y === step.target.y);
+      return { ...step, objective: `AI objective: ${choice.describe(target)}` };
+    }
+  }
+  if (player) {
+    const step = findAutoStep(state, unit, (x, y) => !isDiscovered(state, x, y));
+    if (step) return { ...step, objective: `AI objective: Explore (${step.target.x + 1}, ${step.target.y + 1})` };
+  }
+  return null;
 }
 
 export function autoplayStep(state) {
@@ -570,9 +666,9 @@ export function autoplayStep(state) {
     if (unit.moves < 1 || isGarrison(state, unit)) continue;
     const step = chooseAutoStep(state, unit, true);
     if (step) {
-      const next = moveUnit(state, unit.id, step.x, step.y);
+      const next = moveUnit(state, unit.id, step.x, step.y, step.objective);
       const survivor = next.armies.find(army => army.owner === unit.owner && army.x === step.x && army.y === step.y);
-      return { state: next, unitId: survivor?.id, position: step };
+      return { state: next, unitId: survivor?.id, position: { x: step.x, y: step.y } };
     }
   }
 

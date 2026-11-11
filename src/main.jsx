@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { autoplayStep, BUILDINGS, buildBuilding, cameraFor, canMoveUnit, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, moveCamera, moveUnit, recruit, regionAt, terrainAt, VIEW_SIZE } from './game.js';
+import { autoplayStep, BUILDINGS, buildBuilding, cameraFor, canMoveUnit, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, moveCamera, moveUnit, recruit, regionAt, terrainAt, VIEW_SIZE } from './game.js';
 import './styles.css';
 
 function Icon({ name, size = 20, className = '' }) {
@@ -31,10 +31,12 @@ function TownArt({ capital }) {
   </svg>;
 }
 
-function Chronicle({ log, onClose }) {
+function Chronicle({ events, onClose }) {
   const dialog = useRef(null);
   const [copyStatus, setCopyStatus] = useState('');
-  const text = useMemo(() => [...log].reverse().join('\n'), [log]);
+  const [condensed, setCondensed] = useState(true);
+  const entries = useMemo(() => chronicleEntries(events, condensed), [events, condensed]);
+  const text = useMemo(() => entries.join('\n'), [entries]);
 
   useEffect(() => {
     dialog.current.showModal();
@@ -55,8 +57,8 @@ function Chronicle({ log, onClose }) {
   }
 
   return <dialog ref={dialog} className="chronicle-dialog" aria-labelledby="chronicle-title" onCancel={event => { event.preventDefault(); close(); }}>
-    <div className="chronicle-header"><div><div className="selection-tag">CAMPAIGN HISTORY</div><h2 id="chronicle-title">The Chronicle</h2><p>Every recorded event, from the beginning of your campaign.</p></div><button className="chronicle-close" onClick={close} aria-label="Close chronicle" autoFocus>×</button></div>
-    <div className="chronicle-toolbar"><span>{log.length} events · oldest first</span><button className="chronicle-copy" onClick={copyLog}>Copy log</button></div>
+    <div className="chronicle-header"><div><div className="selection-tag">CAMPAIGN HISTORY</div><h2 id="chronicle-title">The Chronicle</h2><p>Campaign events from all kingdoms, including unexplored territory.</p></div><button className="chronicle-close" onClick={close} aria-label="Close chronicle" autoFocus>×</button></div>
+    <div className="chronicle-toolbar"><label>View <select value={condensed ? 'condensed' : 'full'} onChange={event => { setCondensed(event.target.value === 'condensed'); setCopyStatus(''); }}><option value="condensed">Condensed</option><option value="full">Full detail</option></select></label><span>{entries.length} entries · oldest first</span><button className="chronicle-copy" onClick={copyLog}>Copy log</button></div>
     <p className="copy-status" role="status">{copyStatus || 'Select the text below to copy it manually.'}</p>
     <textarea className="chronicle-log" aria-label="Campaign event log" readOnly value={text} onFocus={event => event.target.select()}/>
   </dialog>;
@@ -282,6 +284,8 @@ function App() {
                 : city ? <><div className="selection-icon"><Icon name="flag" size={26}/></div><div className="selection-tag">{city.owner ? KINGDOMS[city.owner].name.toUpperCase() : 'NEUTRAL SETTLEMENT'}</div><h2>{city.name}</h2><p>{city.owner === 'england' ? 'A settlement under your banner. It produces resources each turn.' : 'Defeat its defenses with an army to claim this settlement.'}</p><div className="detail-stats"><div><small>POSITION</small><b>{city.x + 1}, {city.y + 1}</b></div><div><small>STATUS</small><b>{city.capital ? 'Capital' : 'Town'}</b></div></div><CityDevelopment city={city} resources={resources} disabled={autoplay || Boolean(game.gameOver)} onBuild={doBuild}/>{city.owner === 'england' && <><div className="instruction"><span>✦</span> {cityOccupant?.owner === 'england' && cityOccupant.kind === 'army' ? `Garrison: ${cityOccupant.troops} soldiers. It fights before the city defenses.` : 'City defenses fight attackers even without a garrison.'}</div><button className="secondary-button" disabled={autoplay || Boolean(game.gameOver)} onClick={() => doRecruit('army')}>Raise army <span>60 gold · 40 food · 60 people</span></button><button className="secondary-button" disabled={autoplay || Boolean(game.gameOver)} onClick={() => doRecruit('scout')}>Recruit scouts <span>30 gold · 15 food · 20 people</span></button><small className="recruit-hint">Uses this city's population. The city tile must be unoccupied. New units move next turn.</small></>}</>
                   : <><div className="selection-icon"><Icon name="crosshair" size={26}/></div><div className="selection-tag">AWAITING ORDERS</div><h2>Choose your next move</h2><p>Select an army or a settlement on the map to see its details and available actions.</p></>}
               {unit?.kind === 'army' && <p className="recruit-hint">Full strength: {unit.maxTroops} soldiers. In a friendly settlement, armies recover 10% of full strength each turn for free.</p>}
+              {unit?.general && <div className="history-detail"><small>GENERAL HISTORY · {unit.general.id}</small>{game.generalHistory[unit.general.id]?.events.length ? game.generalHistory[unit.general.id].events.slice(-3).map((event, index) => <p key={index}>{event}</p>) : <p>No recorded victories or defeats yet.</p>}</div>}
+              {city && <div className="history-detail"><small>SETTLEMENT HISTORY · {city.id}</small><p>Ownership changes: {Math.max(0, (city.ownershipHistory?.length || 1) - 1)}. {city.ownershipHistory?.map(entry => `${entry.owner ? KINGDOMS[entry.owner].name : 'Neutral'} (turn ${entry.sinceTurn ?? 'unknown'})`).join(' → ')}</p>{city.ownershipHistory?.at(-1)?.sinceTurn != null && <p>Current occupation: {game.turn - city.ownershipHistory.at(-1).sinceTurn} completed turns.</p>}</div>}
               {notice && <div className="notice" role="alert">{notice}</div>}
             </section>
             <section className="minimap-panel"><div className="detail-heading"><span>THE WIDER WORLD</span><span className="mini-label">100 × 100</span></div><svg className="minimap" viewBox="0 0 100 100" role="img" aria-label="Overview of discovered world"><rect width="100" height="100" fill="#25342c"/>{Object.keys(game.discovered).map(k => { const [x, y] = k.split(',').map(Number); const terrain = terrainAt(x, y); return <rect key={k} x={x} y={y} width="1" height="1" fill={terrain === 'water' ? '#78a8c1' : terrain === 'mountain' ? '#93877b' : '#b3bb8c'}/>; })}<rect x={camera.x} y={camera.y} width="8" height="8" fill="none" stroke="#e7c37d" strokeWidth="1.5"/></svg><div className="minimap-caption"><span><i className="legend-dot england"/> Current view</span><span>{(explored / 100).toFixed(1)}% explored</span></div></section>
@@ -291,9 +295,9 @@ function App() {
         <div className="bottom-note"><span>✧</span> A kingdom is built one decision at a time. <span>✧</span><small>ARROW KEYS TO PAN THE MAP</small></div>
       </div>
     </main>
-    {showChronicle && <Chronicle log={game.log} onClose={() => setShowChronicle(false)}/>}
+    {showChronicle && <Chronicle events={game.logEvents} onClose={() => setShowChronicle(false)}/>}
     {showStandings && <Standings game={game} onClose={() => setShowStandings(false)}/>}
-    {game.gameOver && <div className={`game-over ${game.gameOver.outcome}`} role="dialog" aria-modal="true" aria-labelledby="game-over-title"><div className="game-over-card"><div className="selection-tag">{game.gameOver.outcome === 'victory' ? 'VICTORY' : 'DEFEAT'} · TURN {game.turn}</div><h2 id="game-over-title">{game.gameOver.title}</h2><p>{game.gameOver.message}</p><button className="end-turn" onClick={restartGame}>Begin a new campaign <span className="end-arrow">→</span></button></div></div>}
+    {game.gameOver && <div className={`game-over ${game.gameOver.outcome}`} role="dialog" aria-modal="true" aria-labelledby="game-over-title"><div className="game-over-card"><div className="selection-tag">{game.gameOver.outcome === 'victory' ? 'VICTORY' : 'DEFEAT'} · TURN {game.turn}</div><h2 id="game-over-title">{game.gameOver.title}</h2><p>{game.gameOver.message}</p><button className="end-turn" onClick={restartGame}>Begin a new campaign <span className="end-arrow">→</span></button><button className="chronicle-copy game-over-chronicle" onClick={() => setShowChronicle(true)}>Read the Chronicle</button></div></div>}
   </div>;
 }
 
