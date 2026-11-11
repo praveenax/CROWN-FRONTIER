@@ -40,3 +40,29 @@ button:focus-visible{outline:2px solid #e6c17c;outline-offset:2px}
 .minimap-legend{display:flex;flex-wrap:wrap;gap:6px 9px;margin-top:9px;color:#899888;font-size:8px}.minimap-legend span{display:flex;align-items:center;gap:4px}.minimap-legend i{width:6px;height:6px;border-radius:50%;flex:none}
 .chronicle-toolbar select{border:1px solid #dfe5d6;background:#f5f5ec;color:#405642;padding:7px;margin-left:5px;font:inherit}.history-detail{border-top:1px solid #e5e7db;margin-top:14px;padding-top:10px}.history-detail small{color:#98a494;font-size:8px;font-weight:700;letter-spacing:.5px}.history-detail p{font-size:10px;margin-top:5px;overflow-wrap:anywhere}.game-over-chronicle{margin-top:12px}@media(max-width:620px){.chronicle-toolbar{flex-wrap:wrap}}
 .game-over-copy-status{min-height:14px;color:#879385!important;font-size:10px!important;line-height:1.4;margin:8px 0!important}
+
+.world-event-dialog {
+  width: min(460px, calc(100% - 32px));
+  padding: 24px;
+  border: 1px solid #d5dacb;
+  background: #faf9f3;
+  color: #34473a;
+}
+.world-event-dialog::backdrop { background: #17211eaa; }
+.world-event-dialog h2 { margin: 4px 0 12px; font: 700 28px Georgia, serif; }
+.world-event-label { margin: 0; color: #695a37; font-weight: 700; }
+.world-event-choices { display: grid; gap: 8px; margin-top: 18px; }
+.world-event-choices button {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid #d5dacb;
+  background: #f1f2e9;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.world-event-choices button:hover,
+.world-event-choices button:focus-visible { background: #e3e8d9; }
+.world-event-choices span { font-size: 0.9em; }

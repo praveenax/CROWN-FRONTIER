@@ -1,3 +1,4 @@
+import { WORLD_EVENTS } from "./worldEvents.js";
 import gameData from "./data.json" with { type: "json" };
 
 export const MAP_SIZE = gameData.map.size;
@@ -293,6 +294,9 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
     logEvents: [],
     generalHistory: {},
     gameOver: null,
+    nextWorldEventTurn: 21 + randomInt({ randomSeed: (seed ^ 0x6d2b79f5) >>> 0 }, 11),
+    worldEventDeck: WORLD_EVENTS.map((event) => event.id),
+    pendingWorldEvent: null,
   };
   state.armies[0].general = createGeneral(state);
   rememberGeneral(state, state.armies[0].general);
@@ -1005,50 +1009,180 @@ function spawnBarbarians(state) {
     const targets = count === 0 && playerCities.length ? playerCities : cities;
     if (!targets.length) return;
     const city = targets[randomInt(state, targets.length)];
-    const candidates = [];
-    for (let dy = -6; dy <= 6; dy++) {
-      for (let dx = -6; dx <= 6; dx++) {
-        const x = city.x + dx,
-          y = city.y + dy;
-        const dist = Math.abs(dx) + Math.abs(dy);
-        if (
-          dist < 4 ||
-          dist > 6 ||
-          x < 0 ||
-          y < 0 ||
-          x >= MAP_SIZE ||
-          y >= MAP_SIZE ||
-          terrainAt(x, y) === "water" ||
-          state.cities.some((place) => place.x === x && place.y === y) ||
-          state.armies.some((unit) => unit.x === x && unit.y === y)
-        )
-          continue;
-        candidates.push({ x, y });
-      }
+    spawnRaiderBand(state, city);
+  }
+}
+
+function spawnRaiderBand(state, city, strength) {
+  if (state.armies.filter((unit) => unit.owner === "barbarian").length >= 20)
+    return null;
+  const candidates = [];
+  for (let dy = -6; dy <= 6; dy++) {
+    for (let dx = -6; dx <= 6; dx++) {
+      const x = city.x + dx,
+        y = city.y + dy;
+      const dist = Math.abs(dx) + Math.abs(dy);
+      if (
+        dist < 4 ||
+        dist > 6 ||
+        x < 0 ||
+        y < 0 ||
+        x >= MAP_SIZE ||
+        y >= MAP_SIZE ||
+        terrainAt(x, y) === "water" ||
+        state.cities.some((place) => place.x === x && place.y === y) ||
+        state.armies.some((unit) => unit.x === x && unit.y === y)
+      )
+        continue;
+      candidates.push({ x, y });
     }
-    if (!candidates.length) continue;
-    const position = candidates[randomInt(state, candidates.length)];
-    const band = {
-      id: `barbarian-${state.nextId++}`,
-      name: "Barbarian raiders",
-      owner: "barbarian",
-      kind: "barbarian",
-      ...position,
-      troops: 20 + randomInt(state, 21),
-      units: 1,
-      moves: 0,
-    };
-    state.armies.push(band);
+  }
+  if (!candidates.length) return null;
+  const position = candidates[randomInt(state, candidates.length)];
+  const band = {
+    id: `barbarian-${state.nextId++}`,
+    name: strength ? "Barbarian horde" : "Barbarian raiders",
+    owner: "barbarian",
+    kind: "barbarian",
+    ...position,
+    troops: strength ?? 20 + randomInt(state, 21),
+    ...(strength ? { raidTargetId: city.id } : {}),
+    units: 1,
+    moves: 0,
+  };
+  state.armies.push(band);
+  addLog(
+    state,
+    `${strength ? "A barbarian horde of" : "A band of"} ${band.troops}${strength ? " raiders" : " barbarian raiders"} appeared near ${city.name} (${position.x + 1}, ${position.y + 1}).`,
+  );
+  if (isDiscovered(state, position.x, position.y))
     addLog(
       state,
-      `A band of ${band.troops} barbarian raiders appeared near ${city.name} (${position.x + 1}, ${position.y + 1}).`,
+      `Barbarian raiders sighted near ${position.x + 1}, ${position.y + 1}.`,
     );
-    if (isDiscovered(state, position.x, position.y))
-      addLog(
-        state,
-        `Barbarian raiders sighted near ${position.x + 1}, ${position.y + 1}.`,
-      );
+  return band;
+}
+
+function worldEventOutcome(state, owner, choice) {
+  const city = state.cities.reduce(
+    (largest, place) => place.owner === owner && (!largest || place.population > largest.population)
+      ? place : largest,
+    null,
+  );
+  const army = state.armies.reduce(
+    (largest, unit) =>
+      unit.owner === owner && unit.kind === "army" &&
+      (!largest || unit.troops > largest.troops) ? unit : largest,
+    null,
+  );
+  const effects = choice.effects;
+  const treasury = state.resources[owner];
+  const funding = Math.min(
+    1,
+    effects.gold < 0 ? treasury.gold / -effects.gold : 1,
+    effects.food < 0 ? treasury.food / -effects.food : 1,
+  );
+  const gain = (amount = 0) => amount > 0 ? Math.floor(amount * funding) : amount;
+  return {
+    city,
+    army,
+    gold: Math.max(-treasury.gold, gain(effects.gold)),
+    food: Math.max(-treasury.food, gain(effects.food)),
+    population: city ? Math.max(-city.population, gain(effects.population)) : 0,
+    troops: army
+      ? clamp(gain(effects.troops), 1 - army.troops, Math.max(0, army.maxTroops - army.troops))
+      : 0,
+    raiders: city ? (funding < 1 && effects.underfundedRaiders) || effects.raiders || 0 : 0,
+  };
+}
+
+function describeWorldEventOutcome(outcome) {
+  const signed = (value) => value > 0 ? `+${value}` : String(value);
+  return [
+    outcome.gold && `${signed(outcome.gold)} gold`,
+    outcome.food && `${signed(outcome.food)} food`,
+    outcome.population && `${signed(outcome.population)} population in ${outcome.city.name}`,
+    outcome.troops && `${signed(outcome.troops)} soldiers in ${outcome.army.name}`,
+  ].filter(Boolean);
+}
+
+export function worldEventChoices(state, owner = "england") {
+  const event = WORLD_EVENTS.find((entry) => entry.id === state.pendingWorldEvent);
+  if (!event) return null;
+  return {
+    ...event,
+    choices: event.choices.map((choice) => {
+      const outcome = worldEventOutcome(state, owner, choice);
+      const details = describeWorldEventOutcome(outcome);
+      if (outcome.raiders)
+        details.push(`Risk a band of ${outcome.raiders} raiders near ${outcome.city.name}`);
+      return { ...choice, summary: details.join(" · ") || "No immediate change" };
+    }),
+  };
+}
+
+function chooseWorldEventResponse(state, owner, event) {
+  const resources = state.resources[owner];
+  const goldWeight = 0.25 + 200 / (resources.gold + 200);
+  const foodWeight = 0.25 + 200 / (resources.food + 200);
+  let bestChoice = 0;
+  let bestScore = -Infinity;
+  for (const [index, choice] of event.choices.entries()) {
+    const result = worldEventOutcome(state, owner, choice);
+    const score = result.gold * goldWeight + result.food * foodWeight +
+      result.population * 0.15 + result.troops * 2 - result.raiders * 1.5;
+    if (score > bestScore) {
+      bestScore = score;
+      bestChoice = index;
+    }
   }
+  return bestChoice;
+}
+
+export function resolveWorldEvent(state, playerChoice) {
+  const event = WORLD_EVENTS.find((entry) => entry.id === state.pendingWorldEvent);
+  if (!event || state.gameOver ||
+    (playerChoice !== undefined &&
+      (!Number.isInteger(playerChoice) || !event.choices[playerChoice]))) return state;
+  const next = copyState(state);
+  next.pendingWorldEvent = null;
+  for (const owner of KINGDOM_OWNERS) {
+    if (!next.cities.some((city) => city.owner === owner) &&
+      !next.armies.some((unit) => unit.owner === owner)) continue;
+    const index = owner === "england" && playerChoice !== undefined
+      ? playerChoice : chooseWorldEventResponse(next, owner, event);
+    const choice = event.choices[index];
+    const outcome = worldEventOutcome(next, owner, choice);
+    next.resources[owner].gold += outcome.gold;
+    next.resources[owner].food += outcome.food;
+    if (outcome.population)
+      changePopulation(next, outcome.city, outcome.city.population + outcome.population);
+    if (outcome.troops) outcome.army.troops += outcome.troops;
+    const details = describeWorldEventOutcome(outcome);
+    if (outcome.raiders) {
+      const band = spawnRaiderBand(next, outcome.city, outcome.raiders);
+      details.push(band ? `${band.troops} raiders appeared near ${outcome.city.name}`
+        : `no horde appeared near ${outcome.city.name}`);
+    }
+    addLog(next, `World event · ${event.title}: ${KINGDOMS[owner].name} chose “${choice.label}”. ${details.join("; ") || "No immediate change"}.`);
+  }
+  return next;
+}
+
+function scheduleWorldEvent(state) {
+  if (state.gameOver || state.turn < state.nextWorldEventTurn) return;
+  const deck = state.worldEventDeck.length
+    ? state.worldEventDeck
+    : WORLD_EVENTS.map((event) => event.id);
+  const available = deck.filter((id) => id !== state.lastWorldEvent);
+  const pool = available.length ? available : deck;
+  const id = pool[randomInt(state, pool.length)];
+  state.worldEventDeck = deck.filter((entry) => entry !== id);
+  state.lastWorldEvent = id;
+  state.pendingWorldEvent = id;
+  state.nextWorldEventTurn = state.turn + 20 + randomInt(state, 11);
+  const event = WORLD_EVENTS.find((entry) => entry.id === id);
+  addLog(state, `World event · ${event.title}: ${event.description}`);
 }
 
 function barbarianTurn(state) {
@@ -1062,7 +1196,10 @@ function barbarianTurn(state) {
     while (true) {
       const current = next.armies.find((army) => army.id === id);
       if (!current || current.moves < 1) break;
-      const targets = next.cities.filter(
+      const intendedTarget = next.cities.find(
+        (city) => city.id === current.raidTargetId && city.owner,
+      );
+      const targets = intendedTarget ? [intendedTarget] : next.cities.filter(
         (city) => city.owner && distance(current, city) <= 12,
       );
       const targetPositions = new Set(
@@ -1097,8 +1234,8 @@ function barbarianTurn(state) {
   return next;
 }
 
-export function endTurn(state) {
-  if (state.gameOver) return state;
+export function endTurn(state, { automatic = false } = {}) {
+  if (state.gameOver || state.pendingWorldEvent) return state;
   let next = copyState(state);
   next.turn++;
   addLog(
@@ -1144,7 +1281,8 @@ export function endTurn(state) {
     if (unit.owner === "england") unit.moves = MOVE_RANGE;
   revealPlayer(next);
   updateGameOver(next);
-  return next;
+  scheduleWorldEvent(next);
+  return automatic && next.pendingWorldEvent ? resolveWorldEvent(next) : next;
 }
 
 function findAutoStep(state, unit, isTarget, mergeTargets = new Set()) {
@@ -1299,6 +1437,7 @@ function chooseAutoStep(state, unit, player) {
 
 export function autoplayStep(state) {
   if (state.gameOver) return { state, stopped: state.gameOver.message };
+  if (state.pendingWorldEvent) return { state: resolveWorldEvent(state) };
   const playerUnits = state.armies.filter((unit) => unit.owner === "england");
   const playerCities = state.cities.filter((city) => city.owner === "england");
   if (!playerUnits.length && !playerCities.length) {
@@ -1350,7 +1489,7 @@ export function autoplayStep(state) {
         };
     }
   }
-  return { state: endTurn(state) };
+  return { state: endTurn(state, { automatic: true }) };
 }
 
 export function cameraFor(x, y) {

@@ -48,3 +48,9 @@ Edit [src/data.json](./src/data.json) to change kingdom names and colors, troop 
 - The fog shows only explored tiles. Explored tiles remain visible; this prototype does not yet distinguish current line of sight from previously explored territory.
 
 Combat uses troop count and troop type. Archers fire before melee, and knights take half the usual volley casualties, rounded down. After volleys, the attacker’s remaining troops are weighted by their attack stat and the defender’s by their defense stat. The higher combat strength wins, with ties favoring the defender. In sieges, archers can reduce city defenses with a volley before the assault, and the attacker’s attack stat determines its strength against the walls. Campaign state resets on refresh.
+
+## World events
+
+Starting around turn 21–31, the campaign draws a shared world event every 20–30 turns. The 24 events cycle through a seeded deck before repeating. Each surviving kingdom picks one of three responses. In manual play, the event dialog pauses play for Alderwyn's decision and previews its effects. Autoplay and Fast Play resolve all kingdoms' decisions automatically.
+
+Responses can change gold, food, the population of a kingdom's largest city, or the strength of its largest army. Gains from an underfunded response are reduced. The Barbarian Horde can add a real raiding army near a settlement. The Chronicle records the event, each kingdom's decision, and the resulting changes.

@@ -13,6 +13,8 @@ import {
   regionAt,
   terrainAt,
   VIEW_SIZE,
+  resolveWorldEvent,
+  worldEventChoices,
 } from "./game.js";
 import CampaignHeader from "./components/CampaignHeader.jsx";
 import ChronicleDialog from "./components/ChronicleDialog.jsx";
@@ -20,6 +22,7 @@ import GameOverScreen from "./components/GameOverScreen.jsx";
 import SelectedDetails from "./components/SelectedDetails.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import StandingsDialog from "./components/StandingsDialog.jsx";
+import WorldEventDialog from "./components/WorldEventDialog.jsx";
 import WorldMap from "./components/WorldMap.jsx";
 import WorldOverview from "./components/WorldOverview.jsx";
 
@@ -32,6 +35,7 @@ export default function App() {
   const [showChronicle, setShowChronicle] = useState(false);
   const [showStandings, setShowStandings] = useState(false);
   const autoplay = playMode !== null;
+  const worldEvent = game.pendingWorldEvent ? worldEventChoices(game) : null;
   const unit =
     selected?.type === "unit"
       ? game.armies.find((army) => army.id === selected.id)
@@ -305,6 +309,12 @@ export default function App() {
           </div>
         </div>
       </main>
+      {worldEvent && !autoplay && (
+        <WorldEventDialog
+          event={worldEvent}
+          onChoose={(choice) => setGame((current) => resolveWorldEvent(current, choice))}
+        />
+      )}
       {showChronicle && (
         <ChronicleDialog
           events={game.logEvents}
