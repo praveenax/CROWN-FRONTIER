@@ -1,14 +1,33 @@
 export const MAP_SIZE = 100;
 export const VIEW_SIZE = 8;
 export const MOVE_RANGE = 3;
-export const MAX_TROOPS = 300;
-export const MAX_MERGED_UNITS = 5;
+export const MAX_TROOPS = 1000;
+export const MAX_MERGED_UNITS = 20;
 export const KINGDOMS = {
-  england: { name: "Alderwyn", color: "#cfaa67", capital: "Crownstead" },
-  france: { name: "Valoria", color: "#78a4bb", capital: "Lunebelle" },
-  castile: { name: "Karthaine", color: "#c97d66", capital: "Solmere" },
-  norway: { name: "Eirengard", color: "#a995c0", capital: "Frostharbor" },
-  barbarian: { name: "Barbarians", color: "#9e4f43" },
+  england: {
+    name: "Kingdom of Alderwyn",
+    color: "#cfaa67",
+    capital: "Crownstead",
+  },
+  france: {
+    name: "Kingdom of Valoria",
+    color: "#78a4bb",
+    capital: "Lunebelle",
+  },
+  castile: {
+    name: "Karthaine Papacy",
+    color: "#c97d66",
+    capital: "Solmere",
+  },
+  norway: {
+    name: "Eirengard Crown",
+    color: "#a995c0",
+    capital: "Frostharbor",
+  },
+  barbarian: {
+    name: "Barbarians",
+    color: "#9e4f43",
+  },
 };
 export const TROOP_TYPES = {
   spearman: {
@@ -27,14 +46,16 @@ export const TROOP_TYPES = {
   },
   archer: {
     name: "Archers",
-    description: "Fire a pre-battle volley and weaken city defenses during sieges.",
+    description:
+      "Fire a pre-battle volley and weaken city defenses during sieges.",
     cost: { gold: 70, food: 45, population: 60 },
     attack: 80,
     defense: 80,
   },
   knight: {
     name: "Knights",
-    description: "Powerful attackers with moderate defense and resistance to arrows.",
+    description:
+      "Powerful attackers with moderate defense and resistance to arrows.",
     cost: { gold: 110, food: 60, population: 60 },
     attack: 180,
     defense: 110,
@@ -43,7 +64,9 @@ export const TROOP_TYPES = {
 const KINGDOM_OWNERS = ["england", "france", "castile", "norway"];
 
 function troopTypeOf(army) {
-  return army.troopType && TROOP_TYPES[army.troopType] ? army.troopType : "spearman";
+  return army.troopType && TROOP_TYPES[army.troopType]
+    ? army.troopType
+    : "spearman";
 }
 
 function combatStat(army, stat) {
@@ -777,8 +800,16 @@ function resolveArrival(state, army, objective) {
         `${describe(army)} and ${describe(enemy)} were destroyed by archer volleys at ${location}. [${operationId}]`,
         category,
       );
-      rememberGeneral(state, army.general, `lost at ${location} in ${operationId}`);
-      rememberGeneral(state, enemy.general, `lost at ${location} in ${operationId}`);
+      rememberGeneral(
+        state,
+        army.general,
+        `lost at ${location} in ${operationId}`,
+      );
+      rememberGeneral(
+        state,
+        enemy.general,
+        `lost at ${location} in ${operationId}`,
+      );
       return;
     }
     const attackerWins =
@@ -787,10 +818,16 @@ function resolveArrival(state, army, objective) {
     const winner = attackerWins ? army : enemy;
     const loser = attackerWins ? enemy : army;
     if (loser.troops > 0) {
-      const winnerStat = combatStat(winner, attackerWins ? "attack" : "defense");
+      const winnerStat = combatStat(
+        winner,
+        attackerWins ? "attack" : "defense",
+      );
       winner.troops = Math.max(
         1,
-        Math.min(winner.troops, Math.ceil(Math.abs(attackerPower - defenderPower) / winnerStat)),
+        Math.min(
+          winner.troops,
+          Math.ceil(Math.abs(attackerPower - defenderPower) / winnerStat),
+        ),
       );
     }
     state.armies = state.armies.filter((unit) => unit.id !== loser.id);
@@ -867,9 +904,7 @@ function resolveArrival(state, army, objective) {
         );
       return;
     }
-    army.troops -= Math.ceil(
-      (defense * 100) / combatStat(army, "attack"),
-    );
+    army.troops -= Math.ceil((defense * 100) / combatStat(army, "attack"));
     city.defense = 0;
     addLog(
       state,
@@ -1051,9 +1086,7 @@ function recruitForOwner(
   const city = state.cities.find(
     (place) => place.id === cityId && place.owner === owner,
   );
-  const cost = isScout
-    ? { gold: 30, food: 15, population: 20 }
-    : troop?.cost;
+  const cost = isScout ? { gold: 30, food: 15, population: 20 } : troop?.cost;
   const resources = state.resources[owner];
   if (
     !city ||
@@ -1104,12 +1137,11 @@ function recruitForOwner(
   );
   const army = {
     id: `army-${next.nextId++}`,
-    name:
-      isScout
-        ? "Rangers"
-        : owner === "england"
-          ? `${troop.name} Company`
-          : `${KINGDOMS[owner].name} ${troop.name.toLowerCase()}`,
+    name: isScout
+      ? "Rangers"
+      : owner === "england"
+        ? `${troop.name} Company`
+        : `${KINGDOMS[owner].name} ${troop.name.toLowerCase()}`,
     owner,
     kind: isScout ? "scout" : "army",
     ...(!isScout ? { troopType } : {}),

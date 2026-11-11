@@ -1,42 +1,157 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createRoot } from 'react-dom/client';
-import { autoplayStep, BUILDINGS, buildBuilding, cameraFor, canMoveUnit, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, moveCamera, moveUnit, recruit, regionAt, terrainAt, TROOP_TYPES, VIEW_SIZE } from './game.js';
-import './styles.css';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  autoplayStep,
+  BUILDINGS,
+  buildBuilding,
+  cameraFor,
+  canMoveUnit,
+  chronicleEntries,
+  cityDevelopment,
+  createGame,
+  endTurn,
+  isDiscovered,
+  kingdomPopulation,
+  kingdomStandings,
+  KINGDOMS,
+  moveCamera,
+  moveUnit,
+  recruit,
+  regionAt,
+  terrainAt,
+  TROOP_TYPES,
+  VIEW_SIZE,
+} from "./game.js";
+import "./styles.css";
 
-function Icon({ name, size = 20, className = '' }) {
+function Icon({ name, size = 20, className = "" }) {
   const paths = {
-    crown: <><path d="m3 7 4 3 5-7 5 7 4-3-2 11H5L3 7Z"/><path d="M5 21h14"/></>,
-    gold: <><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 9v6m-2-4h4"/></>,
-    food: <><path d="M12 21V9m0 7c-5 0-7-3-7-6 4 0 7 2 7 6Zm0-4c0-4 3-6 7-6 0 4-2 6-7 6Z"/><path d="M12 9c-2-2-2-5 0-7 2 2 2 5 0 7Z"/></>,
-    people: <><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m1 3a5 5 0 0 1 4 5v1"/></>,
-    sword: <><path d="m14 4 6-2-2 6L7 19l-3 1 1-3L14 4ZM4 14l6 6M3 21l3-3"/></>,
-    eye: <><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></>,
-    flag: <><path d="M5 21V4m0 1c5-3 8 3 14 0v9c-6 3-9-3-14 0"/></>,
-    chevron: <path d="m9 18 6-6-6-6"/>,
-    crosshair: <><circle cx="12" cy="12" r="7"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></>,
-    scroll: <><path d="M7 3h12v15H7a3 3 0 0 0-3 3V6a3 3 0 0 1 3-3Zm0 15a3 3 0 0 1 0 6h12v-6"/><path d="M10 7h6m-6 4h6"/></>,
+    crown: (
+      <>
+        <path d="m3 7 4 3 5-7 5 7 4-3-2 11H5L3 7Z" />
+        <path d="M5 21h14" />
+      </>
+    ),
+    gold: (
+      <>
+        <circle cx="12" cy="12" r="8" />
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 9v6m-2-4h4" />
+      </>
+    ),
+    food: (
+      <>
+        <path d="M12 21V9m0 7c-5 0-7-3-7-6 4 0 7 2 7 6Zm0-4c0-4 3-6 7-6 0 4-2 6-7 6Z" />
+        <path d="M12 9c-2-2-2-5 0-7 2 2 2 5 0 7Z" />
+      </>
+    ),
+    people: (
+      <>
+        <circle cx="9" cy="8" r="3" />
+        <path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m1 3a5 5 0 0 1 4 5v1" />
+      </>
+    ),
+    sword: (
+      <>
+        <path d="m14 4 6-2-2 6L7 19l-3 1 1-3L14 4ZM4 14l6 6M3 21l3-3" />
+      </>
+    ),
+    eye: (
+      <>
+        <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12Z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    ),
+    flag: (
+      <>
+        <path d="M5 21V4m0 1c5-3 8 3 14 0v9c-6 3-9-3-14 0" />
+      </>
+    ),
+    chevron: <path d="m9 18 6-6-6-6" />,
+    crosshair: (
+      <>
+        <circle cx="12" cy="12" r="7" />
+        <path d="M12 2v4m0 12v4M2 12h4m12 0h4" />
+      </>
+    ),
+    scroll: (
+      <>
+        <path d="M7 3h12v15H7a3 3 0 0 0-3 3V6a3 3 0 0 1 3-3Zm0 15a3 3 0 0 1 0 6h12v-6" />
+        <path d="M10 7h6m-6 4h6" />
+      </>
+    ),
   };
-  return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {paths[name]}
+    </svg>
+  );
 }
 
 function TownArt({ capital }) {
-  return <svg viewBox="0 0 60 50" className="town-art" aria-hidden="true">
-    <path d="M5 43h50v4H5z" fill="#343a2c" opacity=".35"/>
-    <path d="M11 28h38v15H11z" fill="#d0bd8e" stroke="#555547" strokeWidth="1.5"/>
-    <path d="m8 29 22-17 22 17Z" fill="#9a6249" stroke="#555547" strokeWidth="1.5"/>
-    <path d="M22 18V8h16v10" fill="#d9c99e" stroke="#555547" strokeWidth="1.5"/>
-    <path d="m19 9 11-7 11 7Z" fill="#865443" stroke="#555547" strokeWidth="1.5"/>
-    <path d="M26 43V31h8v12M16 33h4m20 0h4M28 13h4" fill="none" stroke="#655746" strokeWidth="2"/>
-    {capital && <><path d="M30 2v-7" stroke="#e5d6a9" strokeWidth="1.5"/><path d="m30-5 9 2-9 3" fill="#d5aa62"/></>}
-  </svg>;
+  return (
+    <svg viewBox="0 0 60 50" className="town-art" aria-hidden="true">
+      <path d="M5 43h50v4H5z" fill="#343a2c" opacity=".35" />
+      <path
+        d="M11 28h38v15H11z"
+        fill="#d0bd8e"
+        stroke="#555547"
+        strokeWidth="1.5"
+      />
+      <path
+        d="m8 29 22-17 22 17Z"
+        fill="#9a6249"
+        stroke="#555547"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M22 18V8h16v10"
+        fill="#d9c99e"
+        stroke="#555547"
+        strokeWidth="1.5"
+      />
+      <path
+        d="m19 9 11-7 11 7Z"
+        fill="#865443"
+        stroke="#555547"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M26 43V31h8v12M16 33h4m20 0h4M28 13h4"
+        fill="none"
+        stroke="#655746"
+        strokeWidth="2"
+      />
+      {capital && (
+        <>
+          <path d="M30 2v-7" stroke="#e5d6a9" strokeWidth="1.5" />
+          <path d="m30-5 9 2-9 3" fill="#d5aa62" />
+        </>
+      )}
+    </svg>
+  );
 }
 
 function Chronicle({ events, onClose }) {
   const dialog = useRef(null);
-  const [copyStatus, setCopyStatus] = useState('');
+  const [copyStatus, setCopyStatus] = useState("");
   const [condensed, setCondensed] = useState(true);
-  const entries = useMemo(() => chronicleEntries(events, condensed), [events, condensed]);
-  const text = useMemo(() => entries.join('\n'), [entries]);
+  const entries = useMemo(
+    () => chronicleEntries(events, condensed),
+    [events, condensed],
+  );
+  const text = useMemo(() => entries.join("\n"), [entries]);
 
   useEffect(() => {
     dialog.current.showModal();
@@ -45,9 +160,11 @@ function Chronicle({ events, onClose }) {
   async function copyLog() {
     try {
       await navigator.clipboard.writeText(text);
-      setCopyStatus('Chronicle copied.');
+      setCopyStatus("Chronicle copied.");
     } catch {
-      setCopyStatus('Could not copy. Select the log below and copy it manually.');
+      setCopyStatus(
+        "Could not copy. Select the log below and copy it manually.",
+      );
     }
   }
 
@@ -56,12 +173,64 @@ function Chronicle({ events, onClose }) {
     onClose();
   }
 
-  return <dialog ref={dialog} className="chronicle-dialog" aria-labelledby="chronicle-title" onCancel={event => { event.preventDefault(); close(); }}>
-    <div className="chronicle-header"><div><div className="selection-tag">CAMPAIGN HISTORY</div><h2 id="chronicle-title">The Chronicle</h2><p>Campaign events from all kingdoms, including unexplored territory.</p></div><button className="chronicle-close" onClick={close} aria-label="Close chronicle" autoFocus>×</button></div>
-    <div className="chronicle-toolbar"><label>View <select value={condensed ? 'condensed' : 'full'} onChange={event => { setCondensed(event.target.value === 'condensed'); setCopyStatus(''); }}><option value="condensed">Condensed</option><option value="full">Full detail</option></select></label><span>{entries.length} entries · oldest first</span><button className="chronicle-copy" onClick={copyLog}>Copy log</button></div>
-    <p className="copy-status" role="status">{copyStatus || 'Select the text below to copy it manually.'}</p>
-    <textarea className="chronicle-log" aria-label="Campaign event log" readOnly value={text} onFocus={event => event.target.select()}/>
-  </dialog>;
+  return (
+    <dialog
+      ref={dialog}
+      className="chronicle-dialog"
+      aria-labelledby="chronicle-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        close();
+      }}
+    >
+      <div className="chronicle-header">
+        <div>
+          <div className="selection-tag">CAMPAIGN HISTORY</div>
+          <h2 id="chronicle-title">The Chronicle</h2>
+          <p>
+            Campaign events from all kingdoms, including unexplored territory.
+          </p>
+        </div>
+        <button
+          className="chronicle-close"
+          onClick={close}
+          aria-label="Close chronicle"
+          autoFocus
+        >
+          ×
+        </button>
+      </div>
+      <div className="chronicle-toolbar">
+        <label>
+          View{" "}
+          <select
+            value={condensed ? "condensed" : "full"}
+            onChange={(event) => {
+              setCondensed(event.target.value === "condensed");
+              setCopyStatus("");
+            }}
+          >
+            <option value="condensed">Condensed</option>
+            <option value="full">Full detail</option>
+          </select>
+        </label>
+        <span>{entries.length} entries · oldest first</span>
+        <button className="chronicle-copy" onClick={copyLog}>
+          Copy log
+        </button>
+      </div>
+      <p className="copy-status" role="status">
+        {copyStatus || "Select the text below to copy it manually."}
+      </p>
+      <textarea
+        className="chronicle-log"
+        aria-label="Campaign event log"
+        readOnly
+        value={text}
+        onFocus={(event) => event.target.select()}
+      />
+    </dialog>
+  );
 }
 
 function Standings({ game, onClose }) {
@@ -77,233 +246,1163 @@ function Standings({ game, onClose }) {
     onClose();
   }
 
-  return <dialog ref={dialog} className="standings-dialog" aria-labelledby="standings-title" onCancel={event => { event.preventDefault(); close(); }}>
-    <div className="chronicle-header"><div><div className="selection-tag">THE CONTEST FOR THE WORLD</div><h2 id="standings-title">Kingdom Standings</h2><p>Live rankings for all kingdoms, including unexplored territory.</p></div><button className="chronicle-close" onClick={close} aria-label="Close standings" autoFocus>×</button></div>
-    <div className="standings-table-wrap"><table className="standings-table"><thead><tr><th>Rank / Kingdom</th><th>Economic</th><th>Military</th><th>Land</th><th>Total</th></tr></thead><tbody>{standings.map(row => <tr key={row.owner}><th scope="row"><span className="rank">{standings.findIndex(other => other.total === row.total) + 1}</span><span className="standings-kingdom"><i style={{ background: KINGDOMS[row.owner].color }}/>{KINGDOMS[row.owner].name}{row.owner === 'england' && ' (You)'}<small>Ruler: {game.rulers[row.owner]}</small></span></th><td>{row.economic.toLocaleString()}</td><td>{row.military.toLocaleString()}</td><td>{row.land.toLocaleString()}</td><td><strong>{row.total.toLocaleString()}</strong></td></tr>)}</tbody></table></div>
-    <div className="score-explanation"><strong>How scores work</strong><p>Economic = gold + food + city population + 10 × gold and food produced per turn. Military = troops + current city defenses. Land = 10 × controlled map tiles. Total is the sum of all three scores.</p></div>
-  </dialog>;
+  return (
+    <dialog
+      ref={dialog}
+      className="standings-dialog"
+      aria-labelledby="standings-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        close();
+      }}
+    >
+      <div className="chronicle-header">
+        <div>
+          <div className="selection-tag">THE CONTEST FOR THE WORLD</div>
+          <h2 id="standings-title">Kingdom Standings</h2>
+          <p>Live rankings for all kingdoms, including unexplored territory.</p>
+        </div>
+        <button
+          className="chronicle-close"
+          onClick={close}
+          aria-label="Close standings"
+          autoFocus
+        >
+          ×
+        </button>
+      </div>
+      <div className="standings-table-wrap">
+        <table className="standings-table">
+          <thead>
+            <tr>
+              <th>Rank / Kingdom</th>
+              <th>Economic</th>
+              <th>Military</th>
+              <th>Land</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {standings.map((row) => (
+              <tr key={row.owner}>
+                <th scope="row">
+                  <span className="rank">
+                    {standings.findIndex((other) => other.total === row.total) +
+                      1}
+                  </span>
+                  <span className="standings-kingdom">
+                    <i style={{ background: KINGDOMS[row.owner].color }} />
+                    {KINGDOMS[row.owner].name}
+                    {row.owner === "england" && " (You)"}
+                    <small>Ruler: {game.rulers[row.owner]}</small>
+                  </span>
+                </th>
+                <td>{row.economic.toLocaleString()}</td>
+                <td>{row.military.toLocaleString()}</td>
+                <td>{row.land.toLocaleString()}</td>
+                <td>
+                  <strong>{row.total.toLocaleString()}</strong>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="score-explanation">
+        <strong>How scores work</strong>
+        <p>
+          Economic = gold + food + city population + 10 × gold and food produced
+          per turn. Military = troops + current city defenses. Land = 10 ×
+          controlled map tiles. Total is the sum of all three scores.
+        </p>
+      </div>
+    </dialog>
+  );
 }
 
 function CityDevelopment({ city, resources, disabled, onBuild }) {
   const development = cityDevelopment(city);
   const constructed = city.constructedBuildings || [];
-  const availableBuildings = BUILDINGS.filter(building => !constructed.includes(building.id) && development.level >= building.level);
-  return <div className="city-development">
-    <div className="general-heading"><span>CITY DEVELOPMENT</span><span>LEVEL {development.level}</span></div>
-    <div className="city-stats"><div><small>POPULATION</small><b>{city.population.toLocaleString()}</b></div><div><small>DEFENSE</small><b>{city.defense} / {development.defense}</b></div><div><small>GOLD / TURN</small><b>+{development.gold}</b></div><div><small>FOOD / TURN</small><b>+{development.food}</b></div><div><small>GROWTH / TURN</small><b>+{development.growth}</b></div></div>
-    <p>{city.owner ? (development.nextPopulation ? `Next level at ${development.nextPopulation.toLocaleString()} population.` : 'Maximum city level reached.') : 'Production and growth begin when claimed.'}</p>
-    <div className="city-buildings"><small>BUILDINGS</small><span>{development.buildings.join(' · ')}</span></div>
-    {city.owner === 'england' && <div className="building-options"><small>AVAILABLE TO BUILD</small>{availableBuildings.length ? availableBuildings.map(building => <button key={building.id} className="building-option" disabled={disabled || resources.gold < building.cost.gold || resources.food < building.cost.food} onClick={() => onBuild(building.id)}><span><strong>{building.name}</strong><small>{building.effect}</small></span><b>{building.cost.gold} gold · {building.cost.food} food</b></button>) : <span className="settlements-empty">All available improvements are built.</span>}</div>}
-  </div>;
+  const availableBuildings = BUILDINGS.filter(
+    (building) =>
+      !constructed.includes(building.id) && development.level >= building.level,
+  );
+  return (
+    <div className="city-development">
+      <div className="general-heading">
+        <span>CITY DEVELOPMENT</span>
+        <span>LEVEL {development.level}</span>
+      </div>
+      <div className="city-stats">
+        <div>
+          <small>POPULATION</small>
+          <b>{city.population.toLocaleString()}</b>
+        </div>
+        <div>
+          <small>DEFENSE</small>
+          <b>
+            {city.defense} / {development.defense}
+          </b>
+        </div>
+        <div>
+          <small>GOLD / TURN</small>
+          <b>+{development.gold}</b>
+        </div>
+        <div>
+          <small>FOOD / TURN</small>
+          <b>+{development.food}</b>
+        </div>
+        <div>
+          <small>GROWTH / TURN</small>
+          <b>+{development.growth}</b>
+        </div>
+      </div>
+      <p>
+        {city.owner
+          ? development.nextPopulation
+            ? `Next level at ${development.nextPopulation.toLocaleString()} population.`
+            : "Maximum city level reached."
+          : "Production and growth begin when claimed."}
+      </p>
+      <div className="city-buildings">
+        <small>BUILDINGS</small>
+        <span>{development.buildings.join(" · ")}</span>
+      </div>
+      {city.owner === "england" && (
+        <div className="building-options">
+          <small>AVAILABLE TO BUILD</small>
+          {availableBuildings.length ? (
+            availableBuildings.map((building) => (
+              <button
+                key={building.id}
+                className="building-option"
+                disabled={
+                  disabled ||
+                  resources.gold < building.cost.gold ||
+                  resources.food < building.cost.food
+                }
+                onClick={() => onBuild(building.id)}
+              >
+                <span>
+                  <strong>{building.name}</strong>
+                  <small>{building.effect}</small>
+                </span>
+                <b>
+                  {building.cost.gold} gold · {building.cost.food} food
+                </b>
+              </button>
+            ))
+          ) : (
+            <span className="settlements-empty">
+              All available improvements are built.
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function App() {
   const [game, setGame] = useState(createGame);
   const [camera, setCamera] = useState(() => cameraFor(49, 49));
-  const [selected, setSelected] = useState({ type: 'unit', id: 'army-1' });
-  const [notice, setNotice] = useState('');
+  const [selected, setSelected] = useState({ type: "unit", id: "army-1" });
+  const [notice, setNotice] = useState("");
   const [playMode, setPlayMode] = useState(null);
   const [showChronicle, setShowChronicle] = useState(false);
   const [showStandings, setShowStandings] = useState(false);
   const autoplay = playMode !== null;
-  const unit = selected?.type === 'unit' ? game.armies.find(a => a.id === selected.id) : null;
-  const city = selected?.type === 'city' ? game.cities.find(c => c.id === selected.id) : null;
-  const ownedCities = game.cities.filter(c => c.owner === 'england');
-  const playerUnits = game.armies.filter(a => a.owner === 'england');
-  const generals = playerUnits.filter(a => a.general);
-  const cityOccupant = city && game.armies.find(a => a.x === city.x && a.y === city.y);
+  const unit =
+    selected?.type === "unit"
+      ? game.armies.find((a) => a.id === selected.id)
+      : null;
+  const city =
+    selected?.type === "city"
+      ? game.cities.find((c) => c.id === selected.id)
+      : null;
+  const ownedCities = game.cities.filter((c) => c.owner === "england");
+  const playerUnits = game.armies.filter((a) => a.owner === "england");
+  const generals = playerUnits.filter((a) => a.general);
+  const cityOccupant =
+    city && game.armies.find((a) => a.x === city.x && a.y === city.y);
   const explored = Object.keys(game.discovered).length;
   const resources = game.resources.england;
-  const population = kingdomPopulation(game, 'england');
+  const population = kingdomPopulation(game, "england");
 
-  const tiles = useMemo(() => Array.from({ length: VIEW_SIZE * VIEW_SIZE }, (_, index) => {
-    const x = camera.x + index % VIEW_SIZE;
-    const y = camera.y + Math.floor(index / VIEW_SIZE);
-    const revealed = isDiscovered(game, x, y);
-    const place = revealed ? game.cities.find(c => c.x === x && c.y === y) : null;
-    const occupant = revealed ? game.armies.find(a => a.x === x && a.y === y) : null;
-    const region = revealed ? regionAt(game.cities, x, y) : null;
-    return { x, y, revealed, place, occupant, region, terrain: terrainAt(x, y) };
-  }), [camera, game]);
+  const tiles = useMemo(
+    () =>
+      Array.from({ length: VIEW_SIZE * VIEW_SIZE }, (_, index) => {
+        const x = camera.x + (index % VIEW_SIZE);
+        const y = camera.y + Math.floor(index / VIEW_SIZE);
+        const revealed = isDiscovered(game, x, y);
+        const place = revealed
+          ? game.cities.find((c) => c.x === x && c.y === y)
+          : null;
+        const occupant = revealed
+          ? game.armies.find((a) => a.x === x && a.y === y)
+          : null;
+        const region = revealed ? regionAt(game.cities, x, y) : null;
+        return {
+          x,
+          y,
+          revealed,
+          place,
+          occupant,
+          region,
+          terrain: terrainAt(x, y),
+        };
+      }),
+    [camera, game],
+  );
 
   useEffect(() => {
     function onKey(event) {
-      if (document.querySelector('dialog[open]')) return;
-      if (event.target instanceof HTMLElement && (/INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable)) return;
-      const direction = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+      if (document.querySelector("dialog[open]")) return;
+      if (
+        event.target instanceof HTMLElement &&
+        (/INPUT|TEXTAREA|SELECT/.test(event.target.tagName) ||
+          event.target.isContentEditable)
+      )
+        return;
+      const direction = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1],
+      }[event.key];
       if (direction) {
         event.preventDefault();
-        setCamera(current => moveCamera(current, ...direction));
+        setCamera((current) => moveCamera(current, ...direction));
       }
     }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   useEffect(() => {
     if (!autoplay) return;
-    const timer = window.setTimeout(() => {
-      let state = game;
-      let result;
-      const start = performance.now();
-      let steps = 0;
-      do {
-        result = autoplayStep(state);
-        state = result.state;
-        steps++;
-      } while (playMode === 'fast' && !result.stopped && steps < 30 && performance.now() - start < 75);
-      setGame(state);
-      if (result.stopped) {
-        setPlayMode(null);
-        setNotice(result.stopped);
-        return;
-      }
-      if (result.position && playMode === 'normal') {
-        setCamera(cameraFor(result.position.x, result.position.y));
-        setSelected(result.state.armies.some(army => army.id === result.unitId) ? { type: 'unit', id: result.unitId } : null);
-      }
-    }, playMode === 'fast' ? 10 : 500);
+    const timer = window.setTimeout(
+      () => {
+        let state = game;
+        let result;
+        const start = performance.now();
+        let steps = 0;
+        do {
+          result = autoplayStep(state);
+          state = result.state;
+          steps++;
+        } while (
+          playMode === "fast" &&
+          !result.stopped &&
+          steps < 30 &&
+          performance.now() - start < 75
+        );
+        setGame(state);
+        if (result.stopped) {
+          setPlayMode(null);
+          setNotice(result.stopped);
+          return;
+        }
+        if (result.position && playMode === "normal") {
+          setCamera(cameraFor(result.position.x, result.position.y));
+          setSelected(
+            result.state.armies.some((army) => army.id === result.unitId)
+              ? { type: "unit", id: result.unitId }
+              : null,
+          );
+        }
+      },
+      playMode === "fast" ? 10 : 500,
+    );
     return () => window.clearTimeout(timer);
   }, [playMode, game]);
 
   function clickTile(tile) {
     if (game.gameOver) return;
-    setNotice('');
+    setNotice("");
     if (unit && unit.x === tile.x && unit.y === tile.y) {
-      setSelected(tile.place ? { type: 'city', id: tile.place.id } : null);
+      setSelected(tile.place ? { type: "city", id: tile.place.id } : null);
       return;
     }
-    if (!autoplay && unit && unit.owner === 'england' && Math.abs(unit.x - tile.x) + Math.abs(unit.y - tile.y) === 1 && unit.moves > 0) {
+    if (
+      !autoplay &&
+      unit &&
+      unit.owner === "england" &&
+      Math.abs(unit.x - tile.x) + Math.abs(unit.y - tile.y) === 1 &&
+      unit.moves > 0
+    ) {
       const next = moveUnit(game, unit.id, tile.x, tile.y);
       if (next !== game) {
         setGame(next);
-        const survivor = next.armies.find(a => a.owner === unit.owner && a.x === tile.x && a.y === tile.y);
-        setSelected(survivor ? { type: 'unit', id: survivor.id } : null);
+        const survivor = next.armies.find(
+          (a) => a.owner === unit.owner && a.x === tile.x && a.y === tile.y,
+        );
+        setSelected(survivor ? { type: "unit", id: survivor.id } : null);
         return;
       }
       if (!tile.occupant) {
-        setNotice(tile.terrain === 'water' ? 'Water cannot be crossed.' : 'Not enough movement to enter this mountain.');
+        setNotice(
+          tile.terrain === "water"
+            ? "Water cannot be crossed."
+            : "Not enough movement to enter this mountain.",
+        );
         return;
       }
-      if (tile.occupant.owner === unit.owner && tile.occupant.kind === 'army' && unit.kind === 'army' && (tile.occupant.troopType || 'spearman') !== (unit.troopType || 'spearman')) {
-        setSelected({ type: 'unit', id: tile.occupant.id });
-        setNotice('Armies of different troop types cannot merge.');
+      if (
+        tile.occupant.owner === unit.owner &&
+        tile.occupant.kind === "army" &&
+        unit.kind === "army" &&
+        (tile.occupant.troopType || "spearman") !==
+          (unit.troopType || "spearman")
+      ) {
+        setSelected({ type: "unit", id: tile.occupant.id });
+        setNotice("Armies of different troop types cannot merge.");
         return;
       }
-      if (tile.occupant.owner === unit.owner && tile.occupant.general && unit.general) {
-        setSelected({ type: 'unit', id: tile.occupant.id });
-        setNotice('Armies with two generals cannot merge.');
+      if (
+        tile.occupant.owner === unit.owner &&
+        tile.occupant.general &&
+        unit.general
+      ) {
+        setSelected({ type: "unit", id: tile.occupant.id });
+        setNotice("Armies with two generals cannot merge.");
         return;
       }
     }
-    if (tile.occupant) setSelected({ type: 'unit', id: tile.occupant.id });
-    else if (tile.place) setSelected({ type: 'city', id: tile.place.id });
+    if (tile.occupant) setSelected({ type: "unit", id: tile.occupant.id });
+    else if (tile.place) setSelected({ type: "city", id: tile.place.id });
     else setSelected(null);
   }
 
   function doRecruit(kind) {
     const next = recruit(game, city.id, kind);
     if (next === game) {
-      setNotice('Not enough resources, or a unit is already in this city.');
+      setNotice("Not enough resources, or a unit is already in this city.");
       return;
     }
     setGame(next);
-    setSelected({ type: 'unit', id: `army-${game.nextId}` });
-    setNotice('');
+    setSelected({ type: "unit", id: `army-${game.nextId}` });
+    setNotice("");
   }
 
   function doBuild(buildingId) {
     const next = buildBuilding(game, city.id, buildingId);
     if (next === game) {
-      setNotice('This improvement is unavailable or your kingdom lacks the required resources.');
+      setNotice(
+        "This improvement is unavailable or your kingdom lacks the required resources.",
+      );
       return;
     }
     setGame(next);
-    setNotice('');
+    setNotice("");
   }
 
   function restartGame() {
     const next = createGame();
     setGame(next);
     setCamera(cameraFor(49, 49));
-    setSelected({ type: 'unit', id: 'army-1' });
+    setSelected({ type: "unit", id: "army-1" });
     setPlayMode(null);
-    setNotice('');
+    setNotice("");
   }
 
   function focusUnit(target) {
-    setSelected({ type: 'unit', id: target.id });
+    setSelected({ type: "unit", id: target.id });
     setCamera(cameraFor(target.x, target.y));
-    setNotice('');
+    setNotice("");
   }
 
   function focusCity(target) {
-    setSelected({ type: 'city', id: target.id });
+    setSelected({ type: "city", id: target.id });
     setCamera(cameraFor(target.x, target.y));
-    setNotice('');
+    setNotice("");
   }
 
-  return <div className="app-shell">
-    <aside className="sidebar">
-      <div className="brand"><div className="brand-mark"><Icon name="crown" size={23}/></div><div><strong>CROWN <span>&</span></strong><small>FRONTIER</small></div></div>
-      <div className="sidebar-label">YOUR CAMPAIGN</div>
-      <div className="kingdom-card"><div className="crest"><Icon name="crown" size={25}/></div><div><strong>Kingdom of {KINGDOMS.england.name}</strong><small>Ruler: {game.rulers.england}</small></div></div>
-      <div className="sidebar-section"><div className="section-heading">KINGDOM OVERVIEW <span>01</span></div>
-        <div className="overview-row"><Icon name="flag" size={16}/> <span>Settlements</span><strong>{ownedCities.length}</strong></div>
-        <div className="overview-row"><Icon name="sword" size={16}/> <span>Units</span><strong>{playerUnits.length}</strong></div>
-        <div className="overview-row"><Icon name="eye" size={16}/> <span>World explored</span><strong>{(explored / 100).toFixed(1)}%</strong></div>
-      </div>
-      <div className="sidebar-section"><div className="section-heading">YOUR SETTLEMENTS <span>{String(ownedCities.length).padStart(2, '0')}</span></div>
-        <div className="forces settlements" role="group" aria-label="Your settlements">{ownedCities.length ? ownedCities.map(place => <button key={place.id} onClick={() => focusCity(place)} aria-pressed={city?.id === place.id} className={`force-row ${city?.id === place.id ? 'active' : ''}`}><span className="force-icon"><Icon name="flag" size={16}/></span><span><strong>{place.name}</strong><small>{place.capital ? 'Capital' : 'Town'} · {place.x + 1}, {place.y + 1}</small></span><Icon name="chevron" size={15}/></button>) : <div className="settlements-empty">No settlements held</div>}</div>
-      </div>
-      <div className="sidebar-section"><div className="section-heading">YOUR FORCES <span>{String(playerUnits.length).padStart(2, '0')}</span></div>
-        <div className="forces">{playerUnits.map(a => <button key={a.id} onClick={() => focusUnit(a)} className={`force-row ${unit?.id === a.id ? 'active' : ''}`}><span className="force-icon"><Icon name={a.kind === 'scout' ? 'eye' : 'sword'} size={16}/></span><span><strong>{a.name}</strong><small>{a.troops} {a.kind === 'scout' ? 'scouts' : `${TROOP_TYPES[a.troopType || 'spearman']?.name || 'soldiers'}`}</small></span><Icon name="chevron" size={15}/></button>)}</div>
-      </div>
-      <div className="sidebar-section"><div className="section-heading">YOUR GENERALS <span>{String(generals.length).padStart(2, '0')}</span></div>
-        <div className="forces settlements" role="group" aria-label="Your generals">{generals.length ? generals.map(army => <button key={army.general.id} onClick={() => focusUnit(army)} aria-pressed={unit?.general?.id === army.general.id} className={`force-row ${unit?.general?.id === army.general.id ? 'active' : ''}`}><span className="force-icon"><Icon name="crown" size={16}/></span><span><strong>{army.general.name}</strong><small>Level {army.general.level} · {army.name} ({army.x + 1}, {army.y + 1})</small></span><Icon name="chevron" size={15}/></button>) : <div className="settlements-empty">No generals in service</div>}</div>
-      </div>
-      <div className="sidebar-bottom"><span className="status-dot"/> {game.gameOver ? 'CAMPAIGN COMPLETE' : 'CAMPAIGN IN PROGRESS'} <small>Prototype · v0.1</small></div>
-    </aside>
-
-    <main className="main">
-      <header className="topbar"><div className="breadcrumb">CAMPAIGN <span>/</span> <b>THE KNOWN WORLD</b></div><div className="top-right"><div className="resource"><Icon name="gold"/><span><b>{resources.gold.toLocaleString()}</b><small>GOLD</small></span></div><div className="resource"><Icon name="food"/><span><b>{resources.food.toLocaleString()}</b><small>FOOD</small></span></div><div className="resource"><Icon name="people"/><span><b>{population.toLocaleString()}</b><small>POPULATION</small></span></div><div className="turn-chip"><small>CURRENT TURN</small><b>{String(game.turn).padStart(2, '0')}</b></div></div></header>
-      <div className="content">
-        <div className="page-heading"><div><div className="eyebrow"><span/> YOUR KINGDOM AWAITS</div><h1>The Known World</h1><p>Explore the frontier, grow your kingdom, and make your mark.</p></div><div className="turn-actions"><button className="autoplay-button" onClick={() => setShowStandings(true)}><span>Standings<small>Compare kingdoms</small></span><span className="autoplay-icon" aria-hidden="true">♛</span></button><button className={`autoplay-button ${playMode === 'normal' ? 'running' : ''}`} disabled={Boolean(game.gameOver)} aria-pressed={playMode === 'normal'} onClick={() => { setPlayMode(playMode === 'normal' ? null : 'normal'); setNotice(''); }}><span>{playMode === 'normal' ? 'Pause autoplay' : 'Autoplay'}<small>{playMode === 'normal' ? 'Take back control' : 'Watch your kingdom'}</small></span><span className="autoplay-icon" aria-hidden="true">{playMode === 'normal' ? 'Ⅱ' : '▶'}</span></button><button className={`autoplay-button ${playMode === 'fast' ? 'running' : ''}`} disabled={Boolean(game.gameOver)} aria-pressed={playMode === 'fast'} onClick={() => { setPlayMode(playMode === 'fast' ? null : 'fast'); setNotice(''); }}><span>{playMode === 'fast' ? 'Pause fast play' : 'Fast Play'}<small>{playMode === 'fast' ? 'Take back control' : 'Advance quickly'}</small></span><span className="autoplay-icon" aria-hidden="true">{playMode === 'fast' ? 'Ⅱ' : '▶▶'}</span></button><button className="end-turn" disabled={autoplay || Boolean(game.gameOver)} onClick={() => { setGame(endTurn(game)); setNotice(''); }}><span>End turn <small>Let the world advance</small></span><span className="end-arrow">→</span></button></div></div>
-        <div className="workspace">
-          <section className="map-panel"><div className="panel-header"><div><div className="panel-title"><span className="gold-dot"/> WORLD MAP <span className="subtle">/</span> <span className="subtle">THE FRONTIER</span></div><div className="panel-subtitle">A world of opportunity lies beyond the fog.</div></div><div className="map-coordinates">VIEW <b>{camera.x + 1}–{camera.x + 8} / {camera.y + 1}–{camera.y + 8}</b></div></div>
-            <div className="map-wrap"><div className="map-grid" role="grid" aria-label="World map, eight by eight tiles">{tiles.map(tile => {
-              const reachable = !autoplay && unit?.owner === 'england' && canMoveUnit(game, unit, tile.x, tile.y);
-              const merging = reachable && tile.occupant?.owner === 'england';
-              const selectedTile = (unit && unit.x === tile.x && unit.y === tile.y) || (city && city.x === tile.x && city.y === tile.y);
-              const owner = tile.region?.owner;
-              return <button role="gridcell" key={`${tile.x}-${tile.y}`} disabled={Boolean(game.gameOver)} onClick={() => clickTile(tile)} className={`tile ${tile.revealed ? tile.terrain : 'fog'} ${reachable ? 'reachable' : ''} ${selectedTile ? 'selected' : ''}`} style={owner ? { '--region-color': KINGDOMS[owner].color } : undefined} aria-label={`${tile.x + 1}, ${tile.y + 1}: ${tile.revealed ? `${tile.place?.name || tile.terrain}${tile.occupant ? `, ${tile.occupant.name}` : ''}` : 'unexplored'}${merging ? ', merge' : reachable ? ', reachable' : ''}`}>
-                {tile.revealed && <><span className="terrain-detail">{tile.terrain === 'forest' ? '♠  ♠' : tile.terrain === 'mountain' ? '▲  ▲' : tile.terrain === 'water' ? '≈  ≈' : tile.terrain === 'field' ? '∿ ∿ ∿' : '·  ˙'}</span>{tile.place && <><TownArt capital={tile.place.capital}/><span className="tile-name">{tile.place.name}</span></>}{tile.occupant && <span className={`unit-marker ${tile.occupant.owner === 'england' ? 'friendly' : 'enemy'}`} style={{ '--unit-color': KINGDOMS[tile.occupant.owner].color }}><Icon name={tile.occupant.kind === 'scout' ? 'eye' : 'sword'} size={14}/><b>{tile.occupant.troops}</b></span>}</>}
-                {!tile.revealed && <span className="fog-mark">·</span>}
-              </button>;
-            })}</div></div>
-            <div className="map-footer"><div className="legend"><span><i className="legend-dot england"/> Your kingdom</span><span><i className="legend-dot neutral"/> Neutral settlement</span><span><i className="legend-dot barbarian-key"/> Raiders</span><span><i className="legend-dot water-key"/> Water</span><span><i className="legend-dot mountain-key"/> Mountain</span><span><i className="legend-dot unknown"/> Unexplored</span></div><div className="map-nav"><button onClick={() => setCamera(c => moveCamera(c, -1, 0))} aria-label="Pan map left">←</button><button onClick={() => setCamera(c => moveCamera(c, 0, -1))} aria-label="Pan map up">↑</button><button onClick={() => setCamera(c => moveCamera(c, 0, 1))} aria-label="Pan map down">↓</button><button onClick={() => setCamera(c => moveCamera(c, 1, 0))} aria-label="Pan map right">→</button></div></div>
-          </section>
-          <aside className="right-column">
-            <section className="detail-panel"><div className="detail-heading"><span>SELECTED</span><Icon name="crosshair" size={16}/></div>
-              {unit ? <><div className="selection-icon"><Icon name={unit.kind === 'scout' ? 'eye' : 'sword'} size={26}/></div><div className="selection-tag">{unit.owner === 'england' ? 'YOUR FORCES' : KINGDOMS[unit.owner].name.toUpperCase()}</div><h2>{unit.name}</h2><p>{unit.kind === 'barbarian' ? 'Roaming raiders that attack and loot settlements.' : unit.kind === 'scout' ? 'A light-footed party, ready to reveal the unknown.' : `${TROOP_TYPES[unit.troopType || 'spearman']?.description || 'Combat unit.'} Up to ${unit.units} same-type squads can merge, for a maximum of 300 soldiers.`}</p><div className="detail-stats"><div><small>STRENGTH</small><b>{unit.troops} <span>{unit.kind === 'barbarian' ? 'raiders' : unit.kind === 'scout' ? 'scouts' : 'soldiers'}</span></b></div><div><small>MOVEMENT</small><b>{unit.moves} <span>/ {unit.kind === 'barbarian' ? 2 : 3} points</span></b></div></div>{unit.general ? <div className="general-detail"><div className="general-heading"><span>GENERAL</span><span>LEVEL {unit.general.level}</span></div><strong>{unit.general.name}</strong><div className="general-skills">{Object.entries(unit.general.skills).map(([skill, value]) => <div key={skill}><small>{skill}</small><b>{value}</b></div>)}</div><small className="general-hint">Skills do not affect combat yet.</small></div> : unit.kind === 'army' && <div className="general-detail"><div className="general-heading">NO GENERAL ASSIGNED</div></div>}{unit.owner === 'england' && <div className="instruction"><span>✦</span> {autoplay ? 'Autoplay is issuing orders. Pause to move your units manually.' : 'Only identical troop types can merge. Water blocks movement; mountains cost 2 points.'}</div>}{game.cities.some(c => c.x === unit.x && c.y === unit.y) && <button className="secondary-button" onClick={() => setSelected({ type: 'city', id: game.cities.find(c => c.x === unit.x && c.y === unit.y).id })}>View settlement <span>→</span></button>}</>
-                : city ? <><div className="selection-icon"><Icon name="flag" size={26}/></div><div className="selection-tag">{city.owner ? KINGDOMS[city.owner].name.toUpperCase() : 'NEUTRAL SETTLEMENT'}</div><h2>{city.name}</h2><p>{city.owner === 'england' ? 'A settlement under your banner. It produces resources each turn.' : 'Defeat its defenses with an army to claim this settlement.'}</p><div className="detail-stats"><div><small>POSITION</small><b>{city.x + 1}, {city.y + 1}</b></div><div><small>STATUS</small><b>{city.capital ? 'Capital' : 'Town'}</b></div></div><CityDevelopment city={city} resources={resources} disabled={autoplay || Boolean(game.gameOver)} onBuild={doBuild}/>{city.owner === 'england' && <><div className="instruction"><span>✦</span> {cityOccupant?.owner === 'england' && cityOccupant.kind === 'army' ? `Garrison: ${cityOccupant.troops} soldiers. It fights before the city defenses.` : 'City defenses fight attackers even without a garrison.'}</div>{Object.entries(TROOP_TYPES).map(([type, troop]) => <button key={type} className="secondary-button" disabled={autoplay || Boolean(game.gameOver) || Boolean(cityOccupant) || resources.gold < troop.cost.gold || resources.food < troop.cost.food || city.population < troop.cost.population} onClick={() => doRecruit(type)}>{troop.name}<span>{troop.cost.gold} gold · {troop.cost.food} food · {troop.cost.population} people</span></button>)}<button className="secondary-button" disabled={autoplay || Boolean(game.gameOver) || Boolean(cityOccupant) || resources.gold < 30 || resources.food < 15 || city.population < 20} onClick={() => doRecruit('scout')}>Recruit scouts <span>30 gold · 15 food · 20 people</span></button><small className="recruit-hint">Recruitment uses this city's population. Its tile must be empty; new units move next turn. Only identical troop types can merge.</small></>}</>
-                  : <><div className="selection-icon"><Icon name="crosshair" size={26}/></div><div className="selection-tag">AWAITING ORDERS</div><h2>Choose your next move</h2><p>Select an army or a settlement on the map to see its details and available actions.</p></>}
-              {unit?.kind === 'army' && <p className="recruit-hint">Full strength: {unit.maxTroops} soldiers. In a friendly settlement, armies recover 10% of full strength each turn for free.</p>}
-              {unit?.general && <div className="history-detail"><small>GENERAL HISTORY · {unit.general.id}</small>{game.generalHistory[unit.general.id]?.events.length ? game.generalHistory[unit.general.id].events.slice(-3).map((event, index) => <p key={index}>{event}</p>) : <p>No recorded victories or defeats yet.</p>}</div>}
-              {city && <div className="history-detail"><small>SETTLEMENT HISTORY · {city.id}</small><p>Ownership changes: {Math.max(0, (city.ownershipHistory?.length || 1) - 1)}. {city.ownershipHistory?.map(entry => `${entry.owner ? KINGDOMS[entry.owner].name : 'Neutral'} (turn ${entry.sinceTurn ?? 'unknown'})`).join(' → ')}</p>{city.ownershipHistory?.at(-1)?.sinceTurn != null && <p>Current occupation: {game.turn - city.ownershipHistory.at(-1).sinceTurn} completed turns.</p>}</div>}
-              {notice && <div className="notice" role="alert">{notice}</div>}
-            </section>
-            <section className="minimap-panel"><div className="detail-heading"><span>POLITICAL MAP</span><span className="mini-label">100 × 100</span></div><svg className="minimap" viewBox="0 0 100 100" role="img" aria-label="Political map of discovered world"><rect width="100" height="100" fill="#25342c"/>{Object.keys(game.discovered).map(k => { const [x, y] = k.split(',').map(Number); const owner = regionAt(game.cities, x, y)?.owner; return <rect key={k} x={x} y={y} width="1" height="1" fill={owner ? KINGDOMS[owner].color : '#788475'}><title>{owner ? KINGDOMS[owner].name : 'Neutral territory'}</title></rect>; })}<rect x={camera.x} y={camera.y} width="8" height="8" fill="none" stroke="#e7c37d" strokeWidth="1.5"/></svg><div className="minimap-legend">{Object.entries(KINGDOMS).filter(([owner]) => owner !== 'barbarian').map(([owner, kingdom]) => <span key={owner}><i style={{ background: kingdom.color }}/>{kingdom.name}</span>)}</div><div className="minimap-caption"><span><i className="legend-dot england"/> Current view</span><span>{(explored / 100).toFixed(1)}% explored</span></div></section>
-            <section className="activity-panel"><div className="detail-heading"><span>CHRONICLE</span><button className="show-chronicle" onClick={() => setShowChronicle(true)}>Show All</button></div>{game.log.slice(0, 3).map((entry, i) => <div className="activity" key={`${entry}-${i}`}><i/><span>{entry}</span></div>)}</section>
-          </aside>
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark">
+            <Icon name="crown" size={23} />
+          </div>
+          <div>
+            <strong>
+              CROWN <span>&</span>
+            </strong>
+            <small>FRONTIER</small>
+          </div>
         </div>
-        <div className="bottom-note"><span>✧</span> A kingdom is built one decision at a time. <span>✧</span><small>ARROW KEYS TO PAN THE MAP</small></div>
-      </div>
-    </main>
-    {showChronicle && <Chronicle events={game.logEvents} onClose={() => setShowChronicle(false)}/>}
-    {showStandings && <Standings game={game} onClose={() => setShowStandings(false)}/>}
-    {game.gameOver && <div className={`game-over ${game.gameOver.outcome}`} role="dialog" aria-modal="true" aria-labelledby="game-over-title"><div className="game-over-card"><div className="selection-tag">{game.gameOver.outcome === 'victory' ? 'VICTORY' : 'DEFEAT'} · TURN {game.turn}</div><h2 id="game-over-title">{game.gameOver.title}</h2><p>{game.gameOver.message}</p><button className="end-turn" onClick={restartGame}>Begin a new campaign <span className="end-arrow">→</span></button><button className="chronicle-copy game-over-chronicle" onClick={() => setShowChronicle(true)}>Read the Chronicle</button></div></div>}
-  </div>;
+        <div className="sidebar-label">YOUR CAMPAIGN</div>
+        <div className="kingdom-card">
+          <div className="crest">
+            <Icon name="crown" size={25} />
+          </div>
+          <div>
+            <strong>Kingdom of {KINGDOMS.england.name}</strong>
+            <small>Ruler: {game.rulers.england}</small>
+          </div>
+        </div>
+        <div className="sidebar-section">
+          <div className="section-heading">
+            KINGDOM OVERVIEW <span>01</span>
+          </div>
+          <div className="overview-row">
+            <Icon name="flag" size={16} /> <span>Settlements</span>
+            <strong>{ownedCities.length}</strong>
+          </div>
+          <div className="overview-row">
+            <Icon name="sword" size={16} /> <span>Units</span>
+            <strong>{playerUnits.length}</strong>
+          </div>
+          <div className="overview-row">
+            <Icon name="eye" size={16} /> <span>World explored</span>
+            <strong>{(explored / 100).toFixed(1)}%</strong>
+          </div>
+        </div>
+        <div className="sidebar-section">
+          <div className="section-heading">
+            YOUR SETTLEMENTS{" "}
+            <span>{String(ownedCities.length).padStart(2, "0")}</span>
+          </div>
+          <div
+            className="forces settlements"
+            role="group"
+            aria-label="Your settlements"
+          >
+            {ownedCities.length ? (
+              ownedCities.map((place) => (
+                <button
+                  key={place.id}
+                  onClick={() => focusCity(place)}
+                  aria-pressed={city?.id === place.id}
+                  className={`force-row ${city?.id === place.id ? "active" : ""}`}
+                >
+                  <span className="force-icon">
+                    <Icon name="flag" size={16} />
+                  </span>
+                  <span>
+                    <strong>{place.name}</strong>
+                    <small>
+                      {place.capital ? "Capital" : "Town"} · {place.x + 1},{" "}
+                      {place.y + 1}
+                    </small>
+                  </span>
+                  <Icon name="chevron" size={15} />
+                </button>
+              ))
+            ) : (
+              <div className="settlements-empty">No settlements held</div>
+            )}
+          </div>
+        </div>
+        <div className="sidebar-section">
+          <div className="section-heading">
+            YOUR FORCES{" "}
+            <span>{String(playerUnits.length).padStart(2, "0")}</span>
+          </div>
+          <div className="forces">
+            {playerUnits.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => focusUnit(a)}
+                className={`force-row ${unit?.id === a.id ? "active" : ""}`}
+              >
+                <span className="force-icon">
+                  <Icon name={a.kind === "scout" ? "eye" : "sword"} size={16} />
+                </span>
+                <span>
+                  <strong>{a.name}</strong>
+                  <small>
+                    {a.troops}{" "}
+                    {a.kind === "scout"
+                      ? "scouts"
+                      : `${TROOP_TYPES[a.troopType || "spearman"]?.name || "soldiers"}`}
+                  </small>
+                </span>
+                <Icon name="chevron" size={15} />
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="sidebar-section">
+          <div className="section-heading">
+            YOUR GENERALS{" "}
+            <span>{String(generals.length).padStart(2, "0")}</span>
+          </div>
+          <div
+            className="forces settlements"
+            role="group"
+            aria-label="Your generals"
+          >
+            {generals.length ? (
+              generals.map((army) => (
+                <button
+                  key={army.general.id}
+                  onClick={() => focusUnit(army)}
+                  aria-pressed={unit?.general?.id === army.general.id}
+                  className={`force-row ${unit?.general?.id === army.general.id ? "active" : ""}`}
+                >
+                  <span className="force-icon">
+                    <Icon name="crown" size={16} />
+                  </span>
+                  <span>
+                    <strong>{army.general.name}</strong>
+                    <small>
+                      Level {army.general.level} · {army.name} ({army.x + 1},{" "}
+                      {army.y + 1})
+                    </small>
+                  </span>
+                  <Icon name="chevron" size={15} />
+                </button>
+              ))
+            ) : (
+              <div className="settlements-empty">No generals in service</div>
+            )}
+          </div>
+        </div>
+        <div className="sidebar-bottom">
+          <span className="status-dot" />{" "}
+          {game.gameOver ? "CAMPAIGN COMPLETE" : "CAMPAIGN IN PROGRESS"}{" "}
+          <small>Prototype · v0.1</small>
+        </div>
+      </aside>
+
+      <main className="main">
+        <header className="topbar">
+          <div className="breadcrumb">
+            CAMPAIGN <span>/</span> <b>THE KNOWN WORLD</b>
+          </div>
+          <div className="top-right">
+            <div className="resource">
+              <Icon name="gold" />
+              <span>
+                <b>{resources.gold.toLocaleString()}</b>
+                <small>GOLD</small>
+              </span>
+            </div>
+            <div className="resource">
+              <Icon name="food" />
+              <span>
+                <b>{resources.food.toLocaleString()}</b>
+                <small>FOOD</small>
+              </span>
+            </div>
+            <div className="resource">
+              <Icon name="people" />
+              <span>
+                <b>{population.toLocaleString()}</b>
+                <small>POPULATION</small>
+              </span>
+            </div>
+            <div className="turn-chip">
+              <small>CURRENT TURN</small>
+              <b>{String(game.turn).padStart(2, "0")}</b>
+            </div>
+          </div>
+        </header>
+        <div className="content">
+          <div className="page-heading">
+            <div>
+              <div className="eyebrow">
+                <span /> YOUR KINGDOM AWAITS
+              </div>
+              <h1>The Known World</h1>
+              <p>
+                Explore the frontier, grow your kingdom, and make your mark.
+              </p>
+            </div>
+            <div className="turn-actions">
+              <button
+                className="autoplay-button"
+                onClick={() => setShowStandings(true)}
+              >
+                <span>
+                  Standings<small>Compare kingdoms</small>
+                </span>
+                <span className="autoplay-icon" aria-hidden="true">
+                  ♛
+                </span>
+              </button>
+              <button
+                className={`autoplay-button ${playMode === "normal" ? "running" : ""}`}
+                disabled={Boolean(game.gameOver)}
+                aria-pressed={playMode === "normal"}
+                onClick={() => {
+                  setPlayMode(playMode === "normal" ? null : "normal");
+                  setNotice("");
+                }}
+              >
+                <span>
+                  {playMode === "normal" ? "Pause autoplay" : "Autoplay"}
+                  <small>
+                    {playMode === "normal"
+                      ? "Take back control"
+                      : "Watch your kingdom"}
+                  </small>
+                </span>
+                <span className="autoplay-icon" aria-hidden="true">
+                  {playMode === "normal" ? "Ⅱ" : "▶"}
+                </span>
+              </button>
+              <button
+                className={`autoplay-button ${playMode === "fast" ? "running" : ""}`}
+                disabled={Boolean(game.gameOver)}
+                aria-pressed={playMode === "fast"}
+                onClick={() => {
+                  setPlayMode(playMode === "fast" ? null : "fast");
+                  setNotice("");
+                }}
+              >
+                <span>
+                  {playMode === "fast" ? "Pause fast play" : "Fast Play"}
+                  <small>
+                    {playMode === "fast"
+                      ? "Take back control"
+                      : "Advance quickly"}
+                  </small>
+                </span>
+                <span className="autoplay-icon" aria-hidden="true">
+                  {playMode === "fast" ? "Ⅱ" : "▶▶"}
+                </span>
+              </button>
+              <button
+                className="end-turn"
+                disabled={autoplay || Boolean(game.gameOver)}
+                onClick={() => {
+                  setGame(endTurn(game));
+                  setNotice("");
+                }}
+              >
+                <span>
+                  End turn <small>Let the world advance</small>
+                </span>
+                <span className="end-arrow">→</span>
+              </button>
+            </div>
+          </div>
+          <div className="workspace">
+            <section className="map-panel">
+              <div className="panel-header">
+                <div>
+                  <div className="panel-title">
+                    <span className="gold-dot" /> WORLD MAP{" "}
+                    <span className="subtle">/</span>{" "}
+                    <span className="subtle">THE FRONTIER</span>
+                  </div>
+                  <div className="panel-subtitle">
+                    A world of opportunity lies beyond the fog.
+                  </div>
+                </div>
+                <div className="map-coordinates">
+                  VIEW{" "}
+                  <b>
+                    {camera.x + 1}–{camera.x + 8} / {camera.y + 1}–
+                    {camera.y + 8}
+                  </b>
+                </div>
+              </div>
+              <div className="map-wrap">
+                <div
+                  className="map-grid"
+                  role="grid"
+                  aria-label="World map, eight by eight tiles"
+                >
+                  {tiles.map((tile) => {
+                    const reachable =
+                      !autoplay &&
+                      unit?.owner === "england" &&
+                      canMoveUnit(game, unit, tile.x, tile.y);
+                    const merging =
+                      reachable && tile.occupant?.owner === "england";
+                    const selectedTile =
+                      (unit && unit.x === tile.x && unit.y === tile.y) ||
+                      (city && city.x === tile.x && city.y === tile.y);
+                    const owner = tile.region?.owner;
+                    return (
+                      <button
+                        role="gridcell"
+                        key={`${tile.x}-${tile.y}`}
+                        disabled={Boolean(game.gameOver)}
+                        onClick={() => clickTile(tile)}
+                        className={`tile ${tile.revealed ? tile.terrain : "fog"} ${reachable ? "reachable" : ""} ${selectedTile ? "selected" : ""}`}
+                        style={
+                          owner
+                            ? { "--region-color": KINGDOMS[owner].color }
+                            : undefined
+                        }
+                        aria-label={`${tile.x + 1}, ${tile.y + 1}: ${tile.revealed ? `${tile.place?.name || tile.terrain}${tile.occupant ? `, ${tile.occupant.name}` : ""}` : "unexplored"}${merging ? ", merge" : reachable ? ", reachable" : ""}`}
+                      >
+                        {tile.revealed && (
+                          <>
+                            <span className="terrain-detail">
+                              {tile.terrain === "forest"
+                                ? "♠  ♠"
+                                : tile.terrain === "mountain"
+                                  ? "▲  ▲"
+                                  : tile.terrain === "water"
+                                    ? "≈  ≈"
+                                    : tile.terrain === "field"
+                                      ? "∿ ∿ ∿"
+                                      : "·  ˙"}
+                            </span>
+                            {tile.place && (
+                              <>
+                                <TownArt capital={tile.place.capital} />
+                                <span className="tile-name">
+                                  {tile.place.name}
+                                </span>
+                              </>
+                            )}
+                            {tile.occupant && (
+                              <span
+                                className={`unit-marker ${tile.occupant.owner === "england" ? "friendly" : "enemy"}`}
+                                style={{
+                                  "--unit-color":
+                                    KINGDOMS[tile.occupant.owner].color,
+                                }}
+                              >
+                                <Icon
+                                  name={
+                                    tile.occupant.kind === "scout"
+                                      ? "eye"
+                                      : "sword"
+                                  }
+                                  size={14}
+                                />
+                                <b>{tile.occupant.troops}</b>
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {!tile.revealed && <span className="fog-mark">·</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="map-footer">
+                <div className="legend">
+                  <span>
+                    <i className="legend-dot england" /> Your kingdom
+                  </span>
+                  <span>
+                    <i className="legend-dot neutral" /> Neutral settlement
+                  </span>
+                  <span>
+                    <i className="legend-dot barbarian-key" /> Raiders
+                  </span>
+                  <span>
+                    <i className="legend-dot water-key" /> Water
+                  </span>
+                  <span>
+                    <i className="legend-dot mountain-key" /> Mountain
+                  </span>
+                  <span>
+                    <i className="legend-dot unknown" /> Unexplored
+                  </span>
+                </div>
+                <div className="map-nav">
+                  <button
+                    onClick={() => setCamera((c) => moveCamera(c, -1, 0))}
+                    aria-label="Pan map left"
+                  >
+                    ←
+                  </button>
+                  <button
+                    onClick={() => setCamera((c) => moveCamera(c, 0, -1))}
+                    aria-label="Pan map up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    onClick={() => setCamera((c) => moveCamera(c, 0, 1))}
+                    aria-label="Pan map down"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    onClick={() => setCamera((c) => moveCamera(c, 1, 0))}
+                    aria-label="Pan map right"
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
+            </section>
+            <aside className="right-column">
+              <section className="detail-panel">
+                <div className="detail-heading">
+                  <span>SELECTED</span>
+                  <Icon name="crosshair" size={16} />
+                </div>
+                {unit ? (
+                  <>
+                    <div className="selection-icon">
+                      <Icon
+                        name={unit.kind === "scout" ? "eye" : "sword"}
+                        size={26}
+                      />
+                    </div>
+                    <div className="selection-tag">
+                      {unit.owner === "england"
+                        ? "YOUR FORCES"
+                        : KINGDOMS[unit.owner].name.toUpperCase()}
+                    </div>
+                    <h2>{unit.name}</h2>
+                    <p>
+                      {unit.kind === "barbarian"
+                        ? "Roaming raiders that attack and loot settlements."
+                        : unit.kind === "scout"
+                          ? "A light-footed party, ready to reveal the unknown."
+                          : `${TROOP_TYPES[unit.troopType || "spearman"]?.description || "Combat unit."} Up to ${unit.units} same-type squads can merge, for a maximum of 300 soldiers.`}
+                    </p>
+                    <div className="detail-stats">
+                      <div>
+                        <small>STRENGTH</small>
+                        <b>
+                          {unit.troops}{" "}
+                          <span>
+                            {unit.kind === "barbarian"
+                              ? "raiders"
+                              : unit.kind === "scout"
+                                ? "scouts"
+                                : "soldiers"}
+                          </span>
+                        </b>
+                      </div>
+                      <div>
+                        <small>MOVEMENT</small>
+                        <b>
+                          {unit.moves}{" "}
+                          <span>
+                            / {unit.kind === "barbarian" ? 2 : 3} points
+                          </span>
+                        </b>
+                      </div>
+                    </div>
+                    {unit.general ? (
+                      <div className="general-detail">
+                        <div className="general-heading">
+                          <span>GENERAL</span>
+                          <span>LEVEL {unit.general.level}</span>
+                        </div>
+                        <strong>{unit.general.name}</strong>
+                        <div className="general-skills">
+                          {Object.entries(unit.general.skills).map(
+                            ([skill, value]) => (
+                              <div key={skill}>
+                                <small>{skill}</small>
+                                <b>{value}</b>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                        <small className="general-hint">
+                          Skills do not affect combat yet.
+                        </small>
+                      </div>
+                    ) : (
+                      unit.kind === "army" && (
+                        <div className="general-detail">
+                          <div className="general-heading">
+                            NO GENERAL ASSIGNED
+                          </div>
+                        </div>
+                      )
+                    )}
+                    {unit.owner === "england" && (
+                      <div className="instruction">
+                        <span>✦</span>{" "}
+                        {autoplay
+                          ? "Autoplay is issuing orders. Pause to move your units manually."
+                          : "Only identical troop types can merge. Water blocks movement; mountains cost 2 points."}
+                      </div>
+                    )}
+                    {game.cities.some(
+                      (c) => c.x === unit.x && c.y === unit.y,
+                    ) && (
+                      <button
+                        className="secondary-button"
+                        onClick={() =>
+                          setSelected({
+                            type: "city",
+                            id: game.cities.find(
+                              (c) => c.x === unit.x && c.y === unit.y,
+                            ).id,
+                          })
+                        }
+                      >
+                        View settlement <span>→</span>
+                      </button>
+                    )}
+                  </>
+                ) : city ? (
+                  <>
+                    <div className="selection-icon">
+                      <Icon name="flag" size={26} />
+                    </div>
+                    <div className="selection-tag">
+                      {city.owner
+                        ? KINGDOMS[city.owner].name.toUpperCase()
+                        : "NEUTRAL SETTLEMENT"}
+                    </div>
+                    <h2>{city.name}</h2>
+                    <p>
+                      {city.owner === "england"
+                        ? "A settlement under your banner. It produces resources each turn."
+                        : "Defeat its defenses with an army to claim this settlement."}
+                    </p>
+                    <div className="detail-stats">
+                      <div>
+                        <small>POSITION</small>
+                        <b>
+                          {city.x + 1}, {city.y + 1}
+                        </b>
+                      </div>
+                      <div>
+                        <small>STATUS</small>
+                        <b>{city.capital ? "Capital" : "Town"}</b>
+                      </div>
+                    </div>
+                    <CityDevelopment
+                      city={city}
+                      resources={resources}
+                      disabled={autoplay || Boolean(game.gameOver)}
+                      onBuild={doBuild}
+                    />
+                    {city.owner === "england" && (
+                      <>
+                        <div className="instruction">
+                          <span>✦</span>{" "}
+                          {cityOccupant?.owner === "england" &&
+                          cityOccupant.kind === "army"
+                            ? `Garrison: ${cityOccupant.troops} soldiers. It fights before the city defenses.`
+                            : "City defenses fight attackers even without a garrison."}
+                        </div>
+                        {Object.entries(TROOP_TYPES).map(([type, troop]) => (
+                          <button
+                            key={type}
+                            className="secondary-button"
+                            disabled={
+                              autoplay ||
+                              Boolean(game.gameOver) ||
+                              Boolean(cityOccupant) ||
+                              resources.gold < troop.cost.gold ||
+                              resources.food < troop.cost.food ||
+                              city.population < troop.cost.population
+                            }
+                            onClick={() => doRecruit(type)}
+                          >
+                            {troop.name}
+                            <span>
+                              {troop.cost.gold} gold · {troop.cost.food} food ·{" "}
+                              {troop.cost.population} people
+                            </span>
+                          </button>
+                        ))}
+                        <button
+                          className="secondary-button"
+                          disabled={
+                            autoplay ||
+                            Boolean(game.gameOver) ||
+                            Boolean(cityOccupant) ||
+                            resources.gold < 30 ||
+                            resources.food < 15 ||
+                            city.population < 20
+                          }
+                          onClick={() => doRecruit("scout")}
+                        >
+                          Recruit scouts{" "}
+                          <span>30 gold · 15 food · 20 people</span>
+                        </button>
+                        <small className="recruit-hint">
+                          Recruitment uses this city's population. Its tile must
+                          be empty; new units move next turn. Only identical
+                          troop types can merge.
+                        </small>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="selection-icon">
+                      <Icon name="crosshair" size={26} />
+                    </div>
+                    <div className="selection-tag">AWAITING ORDERS</div>
+                    <h2>Choose your next move</h2>
+                    <p>
+                      Select an army or a settlement on the map to see its
+                      details and available actions.
+                    </p>
+                  </>
+                )}
+                {unit?.kind === "army" && (
+                  <p className="recruit-hint">
+                    Full strength: {unit.maxTroops} soldiers. In a friendly
+                    settlement, armies recover 10% of full strength each turn
+                    for free.
+                  </p>
+                )}
+                {unit?.general && (
+                  <div className="history-detail">
+                    <small>GENERAL HISTORY · {unit.general.id}</small>
+                    {game.generalHistory[unit.general.id]?.events.length ? (
+                      game.generalHistory[unit.general.id].events
+                        .slice(-3)
+                        .map((event, index) => <p key={index}>{event}</p>)
+                    ) : (
+                      <p>No recorded victories or defeats yet.</p>
+                    )}
+                  </div>
+                )}
+                {city && (
+                  <div className="history-detail">
+                    <small>SETTLEMENT HISTORY · {city.id}</small>
+                    <p>
+                      Ownership changes:{" "}
+                      {Math.max(0, (city.ownershipHistory?.length || 1) - 1)}.{" "}
+                      {city.ownershipHistory
+                        ?.map(
+                          (entry) =>
+                            `${entry.owner ? KINGDOMS[entry.owner].name : "Neutral"} (turn ${entry.sinceTurn ?? "unknown"})`,
+                        )
+                        .join(" → ")}
+                    </p>
+                    {city.ownershipHistory?.at(-1)?.sinceTurn != null && (
+                      <p>
+                        Current occupation:{" "}
+                        {game.turn - city.ownershipHistory.at(-1).sinceTurn}{" "}
+                        completed turns.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {notice && (
+                  <div className="notice" role="alert">
+                    {notice}
+                  </div>
+                )}
+              </section>
+              <section className="minimap-panel">
+                <div className="detail-heading">
+                  <span>POLITICAL MAP</span>
+                  <span className="mini-label">100 × 100</span>
+                </div>
+                <svg
+                  className="minimap"
+                  viewBox="0 0 100 100"
+                  role="img"
+                  aria-label="Political map of discovered world"
+                >
+                  <rect width="100" height="100" fill="#25342c" />
+                  {Object.keys(game.discovered).map((k) => {
+                    const [x, y] = k.split(",").map(Number);
+                    const owner = regionAt(game.cities, x, y)?.owner;
+                    return (
+                      <rect
+                        key={k}
+                        x={x}
+                        y={y}
+                        width="1"
+                        height="1"
+                        fill={owner ? KINGDOMS[owner].color : "#788475"}
+                      >
+                        <title>
+                          {owner ? KINGDOMS[owner].name : "Neutral territory"}
+                        </title>
+                      </rect>
+                    );
+                  })}
+                  <rect
+                    x={camera.x}
+                    y={camera.y}
+                    width="8"
+                    height="8"
+                    fill="none"
+                    stroke="#e7c37d"
+                    strokeWidth="1.5"
+                  />
+                </svg>
+                <div className="minimap-legend">
+                  {Object.entries(KINGDOMS)
+                    .filter(([owner]) => owner !== "barbarian")
+                    .map(([owner, kingdom]) => (
+                      <span key={owner}>
+                        <i style={{ background: kingdom.color }} />
+                        {kingdom.name}
+                      </span>
+                    ))}
+                </div>
+                <div className="minimap-caption">
+                  <span>
+                    <i className="legend-dot england" /> Current view
+                  </span>
+                  <span>{(explored / 100).toFixed(1)}% explored</span>
+                </div>
+              </section>
+              <section className="activity-panel">
+                <div className="detail-heading">
+                  <span>CHRONICLE</span>
+                  <button
+                    className="show-chronicle"
+                    onClick={() => setShowChronicle(true)}
+                  >
+                    Show All
+                  </button>
+                </div>
+                {game.log.slice(0, 3).map((entry, i) => (
+                  <div className="activity" key={`${entry}-${i}`}>
+                    <i />
+                    <span>{entry}</span>
+                  </div>
+                ))}
+              </section>
+            </aside>
+          </div>
+          <div className="bottom-note">
+            <span>✧</span> A kingdom is built one decision at a time.{" "}
+            <span>✧</span>
+            <small>ARROW KEYS TO PAN THE MAP</small>
+          </div>
+        </div>
+      </main>
+      {showChronicle && (
+        <Chronicle
+          events={game.logEvents}
+          onClose={() => setShowChronicle(false)}
+        />
+      )}
+      {showStandings && (
+        <Standings game={game} onClose={() => setShowStandings(false)} />
+      )}
+      {game.gameOver && (
+        <div
+          className={`game-over ${game.gameOver.outcome}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="game-over-title"
+        >
+          <div className="game-over-card">
+            <div className="selection-tag">
+              {game.gameOver.outcome === "victory" ? "VICTORY" : "DEFEAT"} ·
+              TURN {game.turn}
+            </div>
+            <h2 id="game-over-title">{game.gameOver.title}</h2>
+            <p>{game.gameOver.message}</p>
+            <button className="end-turn" onClick={restartGame}>
+              Begin a new campaign <span className="end-arrow">→</span>
+            </button>
+            <button
+              className="chronicle-copy game-over-chronicle"
+              onClick={() => setShowChronicle(true)}
+            >
+              Read the Chronicle
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-createRoot(document.getElementById('root')).render(<App/>);
+createRoot(document.getElementById("root")).render(<App />);
