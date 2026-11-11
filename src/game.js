@@ -8,7 +8,9 @@ export const KINGDOMS = {
   france: { name: 'France', color: '#78a4bb', capital: 'Paris' },
   castile: { name: 'Castile', color: '#c97d66', capital: 'Toledo' },
   norway: { name: 'Norway', color: '#a995c0', capital: 'Bergen' },
+  barbarian: { name: 'Barbarians', color: '#9e4f43' },
 };
+const KINGDOM_OWNERS = ['england', 'france', 'castile', 'norway'];
 
 const cityNames = ['Ashford', 'Westhaven', 'Oakheart', 'Rivermouth', 'Stonebridge', 'Highmere', 'Dunwich', 'Eldham', 'Northwatch', 'Rosehaven', 'Whitmoor', 'Greenford', 'Fairhaven', 'Thornfield', 'Bracken', 'Redwater', 'Kingswell', 'Alderwick', 'Greyford', 'Eastmere', 'Millhaven', 'Foxhollow', 'Westerly', 'Pinehurst', 'Blackmere', 'Hawkridge', 'Larkspur', 'Goldcrest', 'Havenwood', 'Briarfield', 'Longford', 'Winterfell'];
 const firstNames = ['Alden', 'Beatrice', 'Cedric', 'Diana', 'Edmund', 'Freya', 'Gareth', 'Helena', 'Isabel', 'Jonas', 'Leona', 'Rowan', 'Matilda', 'Oswald', 'Elise', 'Victor'];
@@ -94,7 +96,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
     turn: 1,
     cities,
     armies,
-    resources: Object.fromEntries(Object.keys(KINGDOMS).map(owner => [owner, { gold: 180, food: 150, population: 1200 }])),
+    resources: Object.fromEntries(KINGDOM_OWNERS.map(owner => [owner, { gold: 180, food: 150, population: 1200 }])),
     discovered: {},
     nextId: 2,
     nextGeneralId: 1,
@@ -147,6 +149,15 @@ function resolveArrival(state, army) {
     if (!attackerWins) return;
   }
   const city = state.cities.find(place => place.x === army.x && place.y === army.y);
+  if (city?.owner && army.owner === 'barbarian') {
+    const resources = state.resources[city.owner];
+    resources.gold = Math.max(0, resources.gold - 30);
+    resources.food = Math.max(0, resources.food - 20);
+    resources.population = Math.max(0, resources.population - 50);
+    if (city.owner === 'england' || isDiscovered(state, city.x, city.y)) addLog(state, `Barbarians raided ${city.name}, stealing gold and food and costing population.`);
+    state.armies = state.armies.filter(unit => unit.id !== army.id);
+    return;
+  }
   if (city && city.owner !== army.owner && army.kind === 'army') {
     city.owner = army.owner;
     if (army.owner === 'england' || isDiscovered(state, city.x, city.y)) addLog(state, `${KINGDOMS[army.owner].name} claimed ${city.name}.`);
@@ -187,6 +198,10 @@ function moveForOwner(state, id, x, y, owner) {
     return next;
   }
   resolveArrival(next, moving);
+  if (owner === 'barbarian' && next.armies.some(army => army.id === id)
+    && !isDiscovered(state, unit.x, unit.y) && isDiscovered(next, x, y)) {
+    addLog(next, `Barbarian raiders sighted near ${x + 1}, ${y + 1}.`);
+  }
   revealPlayer(next);
   return next;
 }
@@ -199,14 +214,24 @@ export function recruit(state, cityId, kind = 'army') {
   return recruitForOwner(state, cityId, 'england', kind);
 }
 
-function recruitForOwner(state, cityId, owner, kind = 'army') {
+function recruitForOwner(state, cityId, owner, kind = 'army', allowAdjacent = false) {
   const city = state.cities.find(place => place.id === cityId && place.owner === owner);
   const cost = kind === 'scout' ? { gold: 30, food: 15, population: 20 } : { gold: 60, food: 40, population: 60 };
   const resources = state.resources[owner];
-  if (!city || !['army', 'scout'].includes(kind) || state.armies.some(army => army.x === city.x && army.y === city.y) || Object.entries(cost).some(([resource, amount]) => resources[resource] < amount)) return state;
+  if (!city || !['army', 'scout'].includes(kind) || Object.entries(cost).some(([resource, amount]) => resources[resource] < amount)) return state;
+  const occupant = state.armies.find(army => army.x === city.x && army.y === city.y);
+  let position = city;
+  if (occupant) {
+    if (!allowAdjacent || occupant.owner !== owner || occupant.kind !== 'army') return state;
+    position = [[1, 0], [0, -1], [-1, 0], [0, 1]]
+      .map(([dx, dy]) => ({ x: city.x + dx, y: city.y + dy }))
+      .find(tile => tile.x >= 0 && tile.y >= 0 && tile.x < MAP_SIZE && tile.y < MAP_SIZE && terrainAt(tile.x, tile.y) !== 'water'
+        && !state.armies.some(unit => unit.x === tile.x && unit.y === tile.y) && !state.cities.some(place => place.x === tile.x && place.y === tile.y));
+    if (!position) return state;
+  }
   const next = copyState(state);
   for (const [resource, amount] of Object.entries(cost)) next.resources[owner][resource] -= amount;
-  const army = { id: `army-${next.nextId++}`, name: kind === 'scout' ? 'Rangers' : owner === 'england' ? 'New Levy' : `${KINGDOMS[owner].name} levy`, owner, kind, x: city.x, y: city.y, troops: kind === 'scout' ? 20 : 60, units: 1, moves: 0 };
+  const army = { id: `army-${next.nextId++}`, name: kind === 'scout' ? 'Rangers' : owner === 'england' ? 'New Levy' : `${KINGDOMS[owner].name} levy`, owner, kind, x: position.x, y: position.y, troops: kind === 'scout' ? 20 : 60, units: 1, moves: 0 };
   if (kind === 'army' && randomInt(next, 2) === 0) army.general = createGeneral(next);
   next.armies.push(army);
   if (owner === 'england' || isDiscovered(next, city.x, city.y)) addLog(next, `${kind === 'scout' ? 'Scouts recruited' : 'Army raised'} in ${city.name}. Ready next turn.`);
@@ -224,7 +249,7 @@ function enemyTurn(state, owner) {
   for (const id of ids) {
     while (true) {
       const unit = next.armies.find(army => army.id === id);
-      if (!unit || unit.moves < 1) break;
+      if (!unit || unit.moves < 1 || isGarrison(next, unit)) break;
       const step = chooseAutoStep(next, unit, false);
       if (!step) break;
       const moved = moveForOwner(next, id, step.x, step.y, owner);
@@ -232,10 +257,60 @@ function enemyTurn(state, owner) {
       next = moved;
     }
   }
-  if (next.armies.filter(unit => unit.owner === owner && unit.kind === 'army').length < 8) {
+  if (next.armies.filter(unit => unit.owner === owner && unit.kind === 'army').length < next.cities.filter(city => city.owner === owner).length + 4) {
     for (const city of next.cities.filter(place => place.owner === owner)) {
-      const recruited = recruitForOwner(next, city.id, owner);
+      const recruited = recruitForOwner(next, city.id, owner, 'army', true);
       if (recruited !== next) { next = recruited; break; }
+    }
+  }
+  return next;
+}
+
+function spawnBarbarians(state) {
+  if (state.turn < 4 || state.turn % 2 !== 0) return;
+  const cities = state.cities.filter(city => city.owner);
+  const playerCities = cities.filter(city => city.owner === 'england');
+  for (let count = 0; count < 2 && state.armies.filter(unit => unit.owner === 'barbarian').length < 20; count++) {
+    const targets = count === 0 && playerCities.length ? playerCities : cities;
+    if (!targets.length) return;
+    const city = targets[randomInt(state, targets.length)];
+    const candidates = [];
+    for (let dy = -6; dy <= 6; dy++) {
+      for (let dx = -6; dx <= 6; dx++) {
+        const x = city.x + dx, y = city.y + dy;
+        const dist = Math.abs(dx) + Math.abs(dy);
+        if (dist < 4 || dist > 6 || x < 0 || y < 0 || x >= MAP_SIZE || y >= MAP_SIZE || terrainAt(x, y) === 'water'
+          || state.cities.some(place => place.x === x && place.y === y) || state.armies.some(unit => unit.x === x && unit.y === y)) continue;
+        candidates.push({ x, y });
+      }
+    }
+    if (!candidates.length) continue;
+    const position = candidates[randomInt(state, candidates.length)];
+    state.armies.push({ id: `barbarian-${state.nextId++}`, name: 'Barbarian raiders', owner: 'barbarian', kind: 'barbarian', ...position, troops: 20 + randomInt(state, 21), units: 1, moves: 0 });
+    if (isDiscovered(state, position.x, position.y)) addLog(state, `Barbarian raiders sighted near ${position.x + 1}, ${position.y + 1}.`);
+  }
+}
+
+function barbarianTurn(state) {
+  let next = state;
+  const ids = next.armies.filter(unit => unit.owner === 'barbarian').map(unit => unit.id);
+  for (const id of ids) {
+    const unit = next.armies.find(army => army.id === id);
+    unit.moves = 2;
+    while (true) {
+      const current = next.armies.find(army => army.id === id);
+      if (!current || current.moves < 1) break;
+      const targets = next.cities.filter(city => city.owner && distance(current, city) <= 12);
+      const targetPositions = new Set(targets.map(city => key(city.x, city.y)));
+      let step = targets.length && findAutoStep(next, current, (x, y) => targetPositions.has(key(x, y)));
+      if (!step && !targets.length) {
+        const options = [[1, 0], [0, -1], [-1, 0], [0, 1]]
+          .map(([dx, dy]) => ({ x: current.x + dx, y: current.y + dy }))
+          .filter(tile => canMoveUnit(next, current, tile.x, tile.y));
+        if (options.length) step = options[randomInt(next, options.length)];
+      }
+      if (!step) break;
+      next = moveForOwner(next, id, step.x, step.y, 'barbarian');
     }
   }
   return next;
@@ -244,13 +319,15 @@ function enemyTurn(state, owner) {
 export function endTurn(state) {
   let next = copyState(state);
   next.turn++;
-  for (const owner of Object.keys(KINGDOMS)) {
+  for (const owner of KINGDOM_OWNERS) {
     const cityCount = next.cities.filter(city => city.owner === owner).length;
     next.resources[owner].gold += cityCount * 25;
     next.resources[owner].food += cityCount * 20;
     next.resources[owner].population += cityCount * 80;
   }
   for (const owner of ['france', 'castile', 'norway']) next = enemyTurn(next, owner);
+  next = barbarianTurn(next);
+  spawnBarbarians(next);
   for (const unit of next.armies) if (unit.owner === 'england') unit.moves = MOVE_RANGE;
   revealPlayer(next);
   addLog(next, `Turn ${next.turn} begins. Your cities have produced resources.`);
@@ -276,17 +353,24 @@ function findAutoStep(state, unit, isTarget, mergeTargets = new Set()) {
   return null;
 }
 
+function isGarrison(state, unit) {
+  return unit.kind === 'army' && state.cities.some(city => city.owner === unit.owner && city.x === unit.x && city.y === unit.y);
+}
+
 function chooseAutoStep(state, unit, player) {
   const visible = item => !player || isDiscovered(state, item.x, item.y);
   const enemies = state.armies.filter(other => other.owner !== unit.owner && visible(other) && distance(unit, other) <= 8);
-  const allies = state.armies.filter(other => other.id !== unit.id && canMerge(unit, other) && distance(unit, other) <= 8
+  const allies = state.armies.filter(other => other.id !== unit.id && !isGarrison(state, other) && canMerge(unit, other) && distance(unit, other) <= 8
     && (other.units > unit.units || (other.units === unit.units && other.troops >= unit.troops)));
+  const unguarded = unit.kind === 'army' ? state.cities.filter(city => city.owner === unit.owner && !state.armies.some(army => army.owner === unit.owner && army.kind === 'army' && army.x === city.x && army.y === city.y)) : [];
   const towns = unit.kind === 'army' ? state.cities.filter(city => city.owner !== unit.owner && visible(city)) : [];
   const positions = items => new Set(items.map(item => key(item.x, item.y)));
   const enemyPositions = positions(enemies);
+  const unguardedPositions = positions(unguarded);
   const allyPositions = positions(allies);
   const townPositions = positions(towns);
-  return (enemies.length && findAutoStep(state, unit, (x, y) => enemyPositions.has(key(x, y))))
+  return (unguarded.length && findAutoStep(state, unit, (x, y) => unguardedPositions.has(key(x, y))))
+    || (enemies.length && findAutoStep(state, unit, (x, y) => enemyPositions.has(key(x, y))))
     || (allies.length && findAutoStep(state, unit, (x, y) => allyPositions.has(key(x, y)), new Set(allies.map(ally => ally.id))))
     || (towns.length && findAutoStep(state, unit, (x, y) => townPositions.has(key(x, y))))
     || (player && findAutoStep(state, unit, (x, y) => !isDiscovered(state, x, y)));
@@ -303,7 +387,7 @@ export function autoplayStep(state) {
   }
 
   for (const unit of playerUnits) {
-    if (unit.moves < 1) continue;
+    if (unit.moves < 1 || isGarrison(state, unit)) continue;
     const step = chooseAutoStep(state, unit, true);
     if (step) {
       const next = moveUnit(state, unit.id, step.x, step.y);
@@ -312,10 +396,10 @@ export function autoplayStep(state) {
     }
   }
 
-  if (playerUnits.filter(unit => unit.kind === 'army').length < 8) {
+  if (playerUnits.filter(unit => unit.kind === 'army').length < playerCities.length + 4) {
     for (const city of playerCities) {
-      const next = recruit(state, city.id);
-      if (next !== state) return { state: next, unitId: `army-${state.nextId}`, position: city };
+      const next = recruitForOwner(state, city.id, 'england', 'army', true);
+      if (next !== state) return { state: next, unitId: `army-${state.nextId}`, position: next.armies.find(army => army.id === `army-${state.nextId}`) };
     }
   }
   return { state: endTurn(state) };

@@ -27,3 +27,4 @@ button:focus-visible{outline:2px solid #e6c17c;outline-offset:2px}
 .settlements{max-height:230px;overflow-y:auto}.settlements-empty{padding:9px 8px;color:#95a092;font-size:10px}
 .general-detail{border:1px solid #e5e7db;background:#f6f7ee;padding:12px;margin-bottom:15px}.general-heading{display:flex;justify-content:space-between;color:#9da99a;font-size:8px;font-weight:700;letter-spacing:1px}.general-detail>strong{display:block;color:#405642;font-family:Georgia,serif;font-size:15px;font-weight:400;margin:8px 0 11px}.general-skills{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.general-skills small{display:block;color:#98a494;font-size:8px;text-transform:uppercase;letter-spacing:.5px}.general-skills b{display:block;color:#4b604b;font-size:12px;margin-top:3px}
 .general-hint{display:block;color:#98a494;font-size:9px;margin-top:10px}
+.barbarian-key{background:#9e4f43}
