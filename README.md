@@ -13,6 +13,10 @@ npm run dev
 
 Open the address printed by Vite. Run `npm test` for the game logic tests or `npm run build` for a production build.
 
+## Editing game data
+
+Edit [src/data.json](./src/data.json) to change kingdom names and colors, troop stats and costs, city development tiers, buildings, generated names and lakes, map settings, or the starting campaign setup. The game reads this file when it starts; restart or refresh the page after editing.
+
 ## How to play
 
 - Select the Royal Guard and click an adjacent highlighted tile to move. Each unit has three movement points per turn; mountains cost two points to enter and blue water tiles cannot be crossed. The world has numerous lakes and mountain ranges. Use the arrow keys or map buttons to pan.

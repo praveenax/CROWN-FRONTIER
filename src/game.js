@@ -1,67 +1,21 @@
-export const MAP_SIZE = 100;
-export const VIEW_SIZE = 8;
-export const MOVE_RANGE = 3;
-export const MAX_TROOPS = 1000;
-export const MAX_MERGED_UNITS = 20;
-export const KINGDOMS = {
-  england: {
-    name: "Kingdom of Alderwyn",
-    color: "#cfaa67",
-    capital: "Crownstead",
-  },
-  france: {
-    name: "Kingdom of Valoria",
-    color: "#78a4bb",
-    capital: "Lunebelle",
-  },
-  castile: {
-    name: "Karthaine Papacy",
-    color: "#c97d66",
-    capital: "Solmere",
-  },
-  norway: {
-    name: "Eirengard Crown",
-    color: "#a995c0",
-    capital: "Frostharbor",
-  },
-  barbarian: {
-    name: "Barbarians",
-    color: "#9e4f43",
-  },
-};
-export const TROOP_TYPES = {
-  spearman: {
-    name: "Spearmen",
-    description: "Defensive infantry with strong protection in battle.",
-    cost: { gold: 60, food: 40, population: 60 },
-    attack: 100,
-    defense: 150,
-  },
-  swordsman: {
-    name: "Swordsmen",
-    description: "Hard-hitting infantry with a strong attack.",
-    cost: { gold: 75, food: 40, population: 60 },
-    attack: 150,
-    defense: 100,
-  },
-  archer: {
-    name: "Archers",
-    description:
-      "Fire a pre-battle volley and weaken city defenses during sieges.",
-    cost: { gold: 70, food: 45, population: 60 },
-    attack: 80,
-    defense: 80,
-  },
-  knight: {
-    name: "Knights",
-    description:
-      "Powerful attackers with moderate defense and resistance to arrows.",
-    cost: { gold: 110, food: 60, population: 60 },
-    attack: 180,
-    defense: 110,
-  },
-};
-const KINGDOM_OWNERS = ["england", "france", "castile", "norway"];
+import gameData from "./data.json" with { type: "json" };
+
+export const MAP_SIZE = gameData.map.size;
+export const VIEW_SIZE = gameData.map.viewSize;
+export const MOVE_RANGE = gameData.map.moveRange;
+export const MAX_TROOPS = gameData.map.maxTroops;
+export const MAX_MERGED_UNITS = gameData.map.maxMergedUnits;
+export const KINGDOMS = gameData.kingdoms;
+export const TROOP_TYPES = gameData.troopTypes;
+const KINGDOM_OWNERS = gameData.kingdomOwners;
+const cityNames = gameData.names.cities;
+const firstNames = gameData.names.first;
+const lastNames = gameData.names.last;
+const lakes = gameData.terrain.lakes;
+const landmarkLakes = gameData.terrain.landmarkLakes;
+const generalSkills = gameData.generalSkills;
+const cityLevels = gameData.cityLevels;
+export const BUILDINGS = gameData.buildings;
 
 function troopTypeOf(army) {
   return army.troopType && TROOP_TYPES[army.troopType]
@@ -84,238 +38,6 @@ function archerVolley(archers, target) {
   );
 }
 
-const cityNames = [
-  "Ashford",
-  "Westhaven",
-  "Oakheart",
-  "Rivermouth",
-  "Stonebridge",
-  "Highmere",
-  "Dunwich",
-  "Eldham",
-  "Northwatch",
-  "Rosehaven",
-  "Whitmoor",
-  "Greenford",
-  "Fairhaven",
-  "Thornfield",
-  "Bracken",
-  "Redwater",
-  "Kingswell",
-  "Alderwick",
-  "Greyford",
-  "Eastmere",
-  "Millhaven",
-  "Foxhollow",
-  "Westerly",
-  "Pinehurst",
-  "Blackmere",
-  "Hawkridge",
-  "Larkspur",
-  "Goldcrest",
-  "Havenwood",
-  "Briarfield",
-  "Longford",
-  "Winterfell",
-];
-const firstNames = [
-  "Alden",
-  "Beatrice",
-  "Cedric",
-  "Diana",
-  "Edmund",
-  "Freya",
-  "Gareth",
-  "Helena",
-  "Isabel",
-  "Jonas",
-  "Leona",
-  "Rowan",
-  "Matilda",
-  "Oswald",
-  "Elise",
-  "Victor",
-  "Adrian",
-  "Aelira",
-  "Alaric",
-  "Amara",
-  "Ansel",
-  "Aria",
-  "Bastian",
-  "Brenna",
-  "Calista",
-  "Corin",
-  "Darian",
-  "Elara",
-  "Emrys",
-  "Evelyn",
-  "Fenric",
-  "Gwendolyn",
-  "Hadrian",
-  "Ilyana",
-  "Jasper",
-  "Kaelen",
-  "Liora",
-  "Lucian",
-  "Mira",
-  "Nolan",
-  "Odessa",
-  "Orin",
-  "Rhiannon",
-  "Selene",
-  "Seraphina",
-  "Tavian",
-  "Thea",
-  "Tristan",
-  "Valeria",
-  "Wystan",
-];
-const lastNames = [
-  "Ashford",
-  "Blackwood",
-  "Caldwell",
-  "Drake",
-  "Fairfax",
-  "Hawthorne",
-  "Langley",
-  "Mercer",
-  "Northwood",
-  "Ravenscroft",
-  "Sterling",
-  "Thorne",
-  "Valen",
-  "Westbrook",
-  "Wilder",
-  "York",
-  "Aldercrest",
-  "Amberfall",
-  "Arden",
-  "Briarwood",
-  "Brightmoor",
-  "Cindervale",
-  "Corven",
-  "Dawnridge",
-  "Duskwood",
-  "Everwinter",
-  "Falken",
-  "Frostmere",
-  "Goldwyn",
-  "Greycastle",
-  "Harrow",
-  "Ironwood",
-  "Kingsley",
-  "Larkspur",
-  "Mooncrest",
-  "Morrow",
-  "Oakenshield",
-  "Ravenwood",
-  "Redwyne",
-  "Rookwood",
-  "Silvermere",
-  "Skyhaven",
-  "Stormwind",
-  "Sundale",
-  "Thornvale",
-  "Vallen",
-  "Waverly",
-  "Whitehall",
-  "Windermere",
-  "Winterbourne",
-];
-const lakes = [
-  [12, 12],
-  [39, 13],
-  [60, 12],
-  [88, 10],
-  [9, 30],
-  [43, 28],
-  [62, 29],
-  [90, 37],
-  [11, 63],
-  [27, 59],
-  [59, 57],
-  [91, 56],
-  [17, 82],
-  [39, 76],
-  [58, 84],
-  [90, 87],
-];
-const generalSkills = ["fighting", "captain", "charisma"];
-const cityLevels = [
-  {
-    population: 0,
-    buildings: ["Farm", "Market", "Palisade"],
-    gold: 12,
-    food: 20,
-    growth: 80,
-    defense: 20,
-  },
-  {
-    population: 500,
-    buildings: ["Farm", "Market", "Palisade", "Guildhall"],
-    gold: 18,
-    food: 30,
-    growth: 100,
-    defense: 30,
-  },
-  {
-    population: 1000,
-    buildings: ["Farm", "Market", "Palisade", "Guildhall", "Bank"],
-    gold: 25,
-    food: 45,
-    growth: 120,
-    defense: 40,
-  },
-  {
-    population: 2000,
-    buildings: [
-      "Farm",
-      "Market",
-      "Palisade",
-      "Guildhall",
-      "Bank",
-      "Stone walls",
-    ],
-    gold: 35,
-    food: 60,
-    growth: 150,
-    defense: 50,
-  },
-];
-export const BUILDINGS = [
-  {
-    id: "granary",
-    name: "Granary",
-    level: 1,
-    cost: { gold: 45, food: 20 },
-    bonus: { food: 15, growth: 30 },
-    effect: "+15 food and +30 growth per turn",
-  },
-  {
-    id: "watchtower",
-    name: "Watchtower",
-    level: 1,
-    cost: { gold: 60, food: 15 },
-    bonus: { defense: 10 },
-    effect: "+10 maximum city defense",
-  },
-  {
-    id: "trading-post",
-    name: "Trading Post",
-    level: 2,
-    cost: { gold: 50, food: 25 },
-    bonus: { gold: 10 },
-    effect: "+10 gold per turn",
-  },
-  {
-    id: "academy",
-    name: "Academy",
-    level: 3,
-    cost: { gold: 90, food: 40 },
-    bonus: { growth: 100 },
-    effect: "+100 growth per turn",
-  },
-];
 const key = (x, y) => `${x},${y}`;
 const distance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -409,12 +131,7 @@ export function terrainAt(x, y) {
     Math.sin(x * 0.19) + Math.cos(y * 0.16) + Math.sin((x + y) * 0.12);
   const river = x === 32 + Math.round(2 * Math.sin(y / 7)) && y % 12 > 2;
   const lake =
-    [
-      [46, 49],
-      [18, 44],
-      [65, 36],
-      [82, 61],
-    ].some(([cx, cy]) => (x - cx) ** 2 + (y - cy) ** 2 <= 2) ||
+    landmarkLakes.some(([cx, cy]) => (x - cx) ** 2 + (y - cy) ** 2 <= 2) ||
     lakes.some(([cx, cy]) => (x - cx) ** 2 + (y - cy) ** 2 <= 8);
   if (river || lake) return "water";
   if ((x === 48 && y === 48) || (band > 1.65 && n > 0.27)) return "mountain";
@@ -481,75 +198,62 @@ function createGeneral(state) {
 }
 
 export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
-  const cities = [
-    {
-      id: "london",
-      name: KINGDOMS.england.capital,
-      x: 49,
-      y: 49,
-      owner: "england",
-      capital: true,
-    },
-    {
-      id: "paris",
-      name: KINGDOMS.france.capital,
-      x: 20,
-      y: 22,
-      owner: "france",
-      capital: true,
-    },
-    {
-      id: "toledo",
-      name: KINGDOMS.castile.capital,
-      x: 78,
-      y: 24,
-      owner: "castile",
-      capital: true,
-    },
-    {
-      id: "bergen",
-      name: KINGDOMS.norway.capital,
-      x: 75,
-      y: 77,
-      owner: "norway",
-      capital: true,
-    },
-    { id: "ashford", name: "Ashford", x: 52, y: 47, owner: null },
-    { id: "westhaven", name: "Westhaven", x: 45, y: 52, owner: null },
-  ];
+  const cities = gameData.initialCities.map((city) => ({
+    ...city,
+    name: city.capital ? KINGDOMS[city.owner].capital : city.name,
+  }));
+  const settlementGeneration = gameData.settlementGeneration;
   let i = 0;
-  for (let y = 8; y < 100; y += 14) {
-    for (let x = 8; x < 100; x += 14) {
-      const cx = x + ((y * 3 + x) % 5) - 2;
-      const cy = y + ((x * 7 + y) % 5) - 2;
+  for (
+    let y = settlementGeneration.start;
+    y < MAP_SIZE;
+    y += settlementGeneration.spacing
+  ) {
+    for (
+      let x = settlementGeneration.start;
+      x < MAP_SIZE;
+      x += settlementGeneration.spacing
+    ) {
+      const cx =
+        x +
+        ((y * 3 + x) % settlementGeneration.jitterModulo) -
+        settlementGeneration.jitterOffset;
+      const cy =
+        y +
+        ((x * 7 + y) % settlementGeneration.jitterModulo) -
+        settlementGeneration.jitterOffset;
       if (
         terrainAt(cx, cy) === "water" ||
-        cities.some((city) => distance(city, { x: cx, y: cy }) < 7)
+        cities.some(
+          (city) =>
+            distance(city, { x: cx, y: cy }) <
+            settlementGeneration.minimumCityDistance,
+        )
       )
         continue;
-      const name = cityNames[(i + 2) % cityNames.length];
+      const name =
+        cityNames[(i + settlementGeneration.cityNameOffset) % cityNames.length];
       cities.push({ id: `town-${i}`, name, x: cx, y: cy, owner: null });
       i++;
     }
     for (const city of cities) {
-      city.population = city.capital ? 1200 : 300;
+      city.population = city.capital
+        ? gameData.startingPopulation.capital
+        : gameData.startingPopulation.settlement;
       city.defense = cityDevelopment(city).defense;
     }
   }
   for (const city of cities)
     city.ownershipHistory = [{ owner: city.owner, sinceTurn: 1 }];
+  const playerCapital = cities.find((city) => city.owner === "england");
   const armies = [
     {
-      id: "army-1",
-      name: "Royal Guard",
+      ...gameData.startingArmy,
       owner: "england",
       kind: "army",
-      troopType: "spearman",
-      x: 49,
-      y: 49,
-      troops: 120,
-      maxTroops: 120,
-      units: 1,
+      x: playerCapital.x,
+      y: playerCapital.y,
+      maxTroops: gameData.startingArmy.troops,
       moves: MOVE_RANGE,
     },
     ...["france", "castile", "norway"].map((owner, index) => {
@@ -559,12 +263,12 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
         name: `${KINGDOMS[owner].name} host`,
         owner,
         kind: "army",
-        troopType: "spearman",
+        troopType: gameData.enemyArmy.troopType,
         x: city.x,
         y: city.y,
-        troops: 100,
-        maxTroops: 100,
-        units: 1,
+        troops: gameData.enemyArmy.troops,
+        maxTroops: gameData.enemyArmy.troops,
+        units: gameData.enemyArmy.units,
         moves: MOVE_RANGE,
       };
     }),
@@ -574,7 +278,10 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
     cities,
     armies,
     resources: Object.fromEntries(
-      KINGDOM_OWNERS.map((owner) => [owner, { gold: 180, food: 150 }]),
+      KINGDOM_OWNERS.map((owner) => [
+        owner,
+        { ...gameData.startingResources },
+      ]),
     ),
     rulers: {},
     discovered: {},

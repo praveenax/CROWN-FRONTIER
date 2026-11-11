@@ -1,0 +1,337 @@
+{
+  "map": {
+    "size": 100,
+    "viewSize": 8,
+    "moveRange": 3,
+    "maxTroops": 1000,
+    "maxMergedUnits": 20
+  },
+  "kingdoms": {
+    "england": {
+      "name": "Kingdom of Alderwyn",
+      "color": "#cfaa67",
+      "capital": "Crownstead"
+    },
+    "france": {
+      "name": "Kingdom of Valoria",
+      "color": "#78a4bb",
+      "capital": "Lunebelle"
+    },
+    "castile": {
+      "name": "Karthaine Papacy",
+      "color": "#c97d66",
+      "capital": "Solmere"
+    },
+    "norway": {
+      "name": "Eirengard Crown",
+      "color": "#a995c0",
+      "capital": "Frostharbor"
+    },
+    "barbarian": {
+      "name": "Barbarians",
+      "color": "#9e4f43"
+    }
+  },
+  "troopTypes": {
+    "spearman": {
+      "name": "Spearmen",
+      "description": "Defensive infantry with strong protection in battle.",
+      "cost": { "gold": 60, "food": 40, "population": 60 },
+      "attack": 100,
+      "defense": 150
+    },
+    "swordsman": {
+      "name": "Swordsmen",
+      "description": "Hard-hitting infantry with a strong attack.",
+      "cost": { "gold": 75, "food": 40, "population": 60 },
+      "attack": 150,
+      "defense": 100
+    },
+    "archer": {
+      "name": "Archers",
+      "description": "Fire a pre-battle volley and weaken city defenses during sieges.",
+      "cost": { "gold": 70, "food": 45, "population": 60 },
+      "attack": 80,
+      "defense": 80
+    },
+    "knight": {
+      "name": "Knights",
+      "description": "Powerful attackers with moderate defense and resistance to arrows.",
+      "cost": { "gold": 110, "food": 60, "population": 60 },
+      "attack": 180,
+      "defense": 110
+    }
+  },
+  "kingdomOwners": ["england", "france", "castile", "norway"],
+  "names": {
+    "cities": [
+      "Ashford",
+      "Westhaven",
+      "Oakheart",
+      "Rivermouth",
+      "Stonebridge",
+      "Highmere",
+      "Dunwich",
+      "Eldham",
+      "Northwatch",
+      "Rosehaven",
+      "Whitmoor",
+      "Greenford",
+      "Fairhaven",
+      "Thornfield",
+      "Bracken",
+      "Redwater",
+      "Kingswell",
+      "Alderwick",
+      "Greyford",
+      "Eastmere",
+      "Millhaven",
+      "Foxhollow",
+      "Westerly",
+      "Pinehurst",
+      "Blackmere",
+      "Hawkridge",
+      "Larkspur",
+      "Goldcrest",
+      "Havenwood",
+      "Briarfield",
+      "Longford",
+      "Winterfell"
+    ],
+    "first": [
+      "Alden",
+      "Beatrice",
+      "Cedric",
+      "Diana",
+      "Edmund",
+      "Freya",
+      "Gareth",
+      "Helena",
+      "Isabel",
+      "Jonas",
+      "Leona",
+      "Rowan",
+      "Matilda",
+      "Oswald",
+      "Elise",
+      "Victor",
+      "Adrian",
+      "Aelira",
+      "Alaric",
+      "Amara",
+      "Ansel",
+      "Aria",
+      "Bastian",
+      "Brenna",
+      "Calista",
+      "Corin",
+      "Darian",
+      "Elara",
+      "Emrys",
+      "Evelyn",
+      "Fenric",
+      "Gwendolyn",
+      "Hadrian",
+      "Ilyana",
+      "Jasper",
+      "Kaelen",
+      "Liora",
+      "Lucian",
+      "Mira",
+      "Nolan",
+      "Odessa",
+      "Orin",
+      "Rhiannon",
+      "Selene",
+      "Seraphina",
+      "Tavian",
+      "Thea",
+      "Tristan",
+      "Valeria",
+      "Wystan"
+    ],
+    "last": [
+      "Ashford",
+      "Blackwood",
+      "Caldwell",
+      "Drake",
+      "Fairfax",
+      "Hawthorne",
+      "Langley",
+      "Mercer",
+      "Northwood",
+      "Ravenscroft",
+      "Sterling",
+      "Thorne",
+      "Valen",
+      "Westbrook",
+      "Wilder",
+      "York",
+      "Aldercrest",
+      "Amberfall",
+      "Arden",
+      "Briarwood",
+      "Brightmoor",
+      "Cindervale",
+      "Corven",
+      "Dawnridge",
+      "Duskwood",
+      "Everwinter",
+      "Falken",
+      "Frostmere",
+      "Goldwyn",
+      "Greycastle",
+      "Harrow",
+      "Ironwood",
+      "Kingsley",
+      "Larkspur",
+      "Mooncrest",
+      "Morrow",
+      "Oakenshield",
+      "Ravenwood",
+      "Redwyne",
+      "Rookwood",
+      "Silvermere",
+      "Skyhaven",
+      "Stormwind",
+      "Sundale",
+      "Thornvale",
+      "Vallen",
+      "Waverly",
+      "Whitehall",
+      "Windermere",
+      "Winterbourne"
+    ]
+  },
+  "terrain": {
+    "lakes": [
+      [12, 12],
+      [39, 13],
+      [60, 12],
+      [88, 10],
+      [9, 30],
+      [43, 28],
+      [62, 29],
+      [90, 37],
+      [11, 63],
+      [27, 59],
+      [59, 57],
+      [91, 56],
+      [17, 82],
+      [39, 76],
+      [58, 84],
+      [90, 87]
+    ],
+    "landmarkLakes": [
+      [46, 49],
+      [18, 44],
+      [65, 36],
+      [82, 61]
+    ]
+  },
+  "generalSkills": ["fighting", "captain", "charisma"],
+  "cityLevels": [
+    {
+      "population": 0,
+      "buildings": ["Farm", "Market", "Palisade"],
+      "gold": 12,
+      "food": 20,
+      "growth": 80,
+      "defense": 20
+    },
+    {
+      "population": 500,
+      "buildings": ["Farm", "Market", "Palisade", "Guildhall"],
+      "gold": 18,
+      "food": 30,
+      "growth": 100,
+      "defense": 30
+    },
+    {
+      "population": 1000,
+      "buildings": ["Farm", "Market", "Palisade", "Guildhall", "Bank"],
+      "gold": 25,
+      "food": 45,
+      "growth": 120,
+      "defense": 40
+    },
+    {
+      "population": 2000,
+      "buildings": ["Farm", "Market", "Palisade", "Guildhall", "Bank", "Stone walls"],
+      "gold": 35,
+      "food": 60,
+      "growth": 150,
+      "defense": 50
+    }
+  ],
+  "buildings": [
+    {
+      "id": "granary",
+      "name": "Granary",
+      "level": 1,
+      "cost": { "gold": 45, "food": 20 },
+      "bonus": { "food": 15, "growth": 30 },
+      "effect": "+15 food and +30 growth per turn"
+    },
+    {
+      "id": "watchtower",
+      "name": "Watchtower",
+      "level": 1,
+      "cost": { "gold": 60, "food": 15 },
+      "bonus": { "defense": 10 },
+      "effect": "+10 maximum city defense"
+    },
+    {
+      "id": "trading-post",
+      "name": "Trading Post",
+      "level": 2,
+      "cost": { "gold": 50, "food": 25 },
+      "bonus": { "gold": 10 },
+      "effect": "+10 gold per turn"
+    },
+    {
+      "id": "academy",
+      "name": "Academy",
+      "level": 3,
+      "cost": { "gold": 90, "food": 40 },
+      "bonus": { "growth": 100 },
+      "effect": "+100 growth per turn"
+    }
+  ],
+  "initialCities": [
+    { "id": "london", "owner": "england", "x": 49, "y": 49, "capital": true },
+    { "id": "paris", "owner": "france", "x": 20, "y": 22, "capital": true },
+    { "id": "toledo", "owner": "castile", "x": 78, "y": 24, "capital": true },
+    { "id": "bergen", "owner": "norway", "x": 75, "y": 77, "capital": true },
+    { "id": "ashford", "name": "Ashford", "x": 52, "y": 47, "owner": null },
+    { "id": "westhaven", "name": "Westhaven", "x": 45, "y": 52, "owner": null }
+  ],
+  "settlementGeneration": {
+    "start": 8,
+    "spacing": 14,
+    "jitterModulo": 5,
+    "jitterOffset": 2,
+    "minimumCityDistance": 7,
+    "cityNameOffset": 2
+  },
+  "startingPopulation": {
+    "capital": 1200,
+    "settlement": 300
+  },
+  "startingResources": {
+    "gold": 180,
+    "food": 150
+  },
+  "startingArmy": {
+    "id": "army-1",
+    "name": "Royal Guard",
+    "troopType": "spearman",
+    "troops": 120,
+    "units": 1
+  },
+  "enemyArmy": {
+    "troopType": "spearman",
+    "troops": 100,
+    "units": 1
+  }
+}
