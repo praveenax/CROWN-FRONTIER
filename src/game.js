@@ -15,6 +15,7 @@ const KINGDOM_OWNERS = ['england', 'france', 'castile', 'norway'];
 const cityNames = ['Ashford', 'Westhaven', 'Oakheart', 'Rivermouth', 'Stonebridge', 'Highmere', 'Dunwich', 'Eldham', 'Northwatch', 'Rosehaven', 'Whitmoor', 'Greenford', 'Fairhaven', 'Thornfield', 'Bracken', 'Redwater', 'Kingswell', 'Alderwick', 'Greyford', 'Eastmere', 'Millhaven', 'Foxhollow', 'Westerly', 'Pinehurst', 'Blackmere', 'Hawkridge', 'Larkspur', 'Goldcrest', 'Havenwood', 'Briarfield', 'Longford', 'Winterfell'];
 const firstNames = ['Alden', 'Beatrice', 'Cedric', 'Diana', 'Edmund', 'Freya', 'Gareth', 'Helena', 'Isabel', 'Jonas', 'Leona', 'Rowan', 'Matilda', 'Oswald', 'Elise', 'Victor', 'Adrian', 'Aelira', 'Alaric', 'Amara', 'Ansel', 'Aria', 'Bastian', 'Brenna', 'Calista', 'Corin', 'Darian', 'Elara', 'Emrys', 'Evelyn', 'Fenric', 'Gwendolyn', 'Hadrian', 'Ilyana', 'Jasper', 'Kaelen', 'Liora', 'Lucian', 'Mira', 'Nolan', 'Odessa', 'Orin', 'Rhiannon', 'Selene', 'Seraphina', 'Tavian', 'Thea', 'Tristan', 'Valeria', 'Wystan'];
 const lastNames = ['Ashford', 'Blackwood', 'Caldwell', 'Drake', 'Fairfax', 'Hawthorne', 'Langley', 'Mercer', 'Northwood', 'Ravenscroft', 'Sterling', 'Thorne', 'Valen', 'Westbrook', 'Wilder', 'York', 'Aldercrest', 'Amberfall', 'Arden', 'Briarwood', 'Brightmoor', 'Cindervale', 'Corven', 'Dawnridge', 'Duskwood', 'Everwinter', 'Falken', 'Frostmere', 'Goldwyn', 'Greycastle', 'Harrow', 'Ironwood', 'Kingsley', 'Larkspur', 'Mooncrest', 'Morrow', 'Oakenshield', 'Ravenwood', 'Redwyne', 'Rookwood', 'Silvermere', 'Skyhaven', 'Stormwind', 'Sundale', 'Thornvale', 'Vallen', 'Waverly', 'Whitehall', 'Windermere', 'Winterbourne'];
+const lakes = [[12, 12], [39, 13], [60, 12], [88, 10], [9, 30], [43, 28], [62, 29], [90, 37], [11, 63], [27, 59], [59, 57], [91, 56], [17, 82], [39, 76], [58, 84], [90, 87]];
 const generalSkills = ['fighting', 'captain', 'charisma'];
 const cityLevels = [
   { population: 0, buildings: ['Farm', 'Market', 'Palisade'], gold: 25, food: 20, growth: 80, defense: 20 },
@@ -67,9 +68,10 @@ export function terrainAt(x, y) {
   const n = Math.abs(Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1;
   const band = Math.sin(x * 0.19) + Math.cos(y * 0.16) + Math.sin((x + y) * 0.12);
   const river = x === 32 + Math.round(2 * Math.sin(y / 7)) && y % 12 > 2;
-  const lake = [[46, 49], [18, 44], [65, 36], [82, 61]].some(([cx, cy]) => (x - cx) ** 2 + (y - cy) ** 2 <= 2);
+  const lake = [[46, 49], [18, 44], [65, 36], [82, 61]].some(([cx, cy]) => (x - cx) ** 2 + (y - cy) ** 2 <= 2)
+    || lakes.some(([cx, cy]) => (x - cx) ** 2 + (y - cy) ** 2 <= 8);
   if (river || lake) return 'water';
-  if ((x === 48 && y === 48) || (band > 2.25 && n > 0.27)) return 'mountain';
+  if ((x === 48 && y === 48) || (band > 1.65 && n > 0.27)) return 'mountain';
   if (band < -1.35 && n > 0.33) return 'forest';
   if (n > 0.72) return 'field';
   return 'grass';
@@ -141,10 +143,10 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
     }
   }
   const armies = [
-    { id: 'army-1', name: 'Royal Guard', owner: 'england', kind: 'army', x: 49, y: 49, troops: 120, units: 1, moves: MOVE_RANGE },
+    { id: 'army-1', name: 'Royal Guard', owner: 'england', kind: 'army', x: 49, y: 49, troops: 120, maxTroops: 120, units: 1, moves: MOVE_RANGE },
     ...['france', 'castile', 'norway'].map((owner, index) => {
       const city = cities.find(c => c.owner === owner);
-      return { id: `enemy-${index}`, name: `${KINGDOMS[owner].name} host`, owner, kind: 'army', x: city.x, y: city.y, troops: 100, units: 1, moves: MOVE_RANGE };
+      return { id: `enemy-${index}`, name: `${KINGDOMS[owner].name} host`, owner, kind: 'army', x: city.x, y: city.y, troops: 100, maxTroops: 100, units: 1, moves: MOVE_RANGE };
     }),
   ];
   const state = {
@@ -286,6 +288,7 @@ function moveForOwner(state, id, x, y, owner) {
   const ally = next.armies.find(other => other.id !== id && other.owner === owner && other.x === x && other.y === y);
   if (ally) {
     ally.troops += moving.troops;
+    ally.maxTroops = Math.min(MAX_TROOPS, ally.maxTroops + moving.maxTroops);
     ally.units += moving.units;
     ally.moves = Math.min(ally.moves, moving.moves);
     if (moving.general) ally.general = moving.general;
@@ -331,7 +334,7 @@ function recruitForOwner(state, cityId, owner, kind = 'army', allowAdjacent = fa
   next.resources[owner].food -= cost.food;
   const recruitingCity = next.cities.find(place => place.id === cityId);
   changePopulation(next, recruitingCity, recruitingCity.population - cost.population);
-  const army = { id: `army-${next.nextId++}`, name: kind === 'scout' ? 'Rangers' : owner === 'england' ? 'New Levy' : `${KINGDOMS[owner].name} levy`, owner, kind, x: position.x, y: position.y, troops: kind === 'scout' ? 20 : 60, units: 1, moves: 0 };
+  const army = { id: `army-${next.nextId++}`, name: kind === 'scout' ? 'Rangers' : owner === 'england' ? 'New Levy' : `${KINGDOMS[owner].name} levy`, owner, kind, x: position.x, y: position.y, troops: kind === 'scout' ? 20 : 60, ...(kind === 'army' ? { maxTroops: 60 } : {}), units: 1, moves: 0 };
   if (kind === 'army' && randomInt(next, 2) === 0) army.general = createGeneral(next);
   next.armies.push(army);
   addLog(next, `${KINGDOMS[owner].name}: ${kind === 'scout' ? 'Scouts recruited' : 'Army raised'} in ${city.name}${army.general ? ` under General ${army.general.name}` : ''}. Ready next turn.`);
@@ -430,6 +433,13 @@ export function endTurn(state) {
       changePopulation(next, city, city.population + development.growth);
     }
     city.defense = cityDevelopment(city).defense;
+  }
+  for (const army of next.armies) {
+    if (!isGarrison(next, army) || army.troops >= army.maxTroops) continue;
+    const recovered = Math.min(Math.ceil(army.maxTroops * 0.1), army.maxTroops - army.troops);
+    army.troops += recovered;
+    const city = next.cities.find(place => place.owner === army.owner && place.x === army.x && place.y === army.y);
+    addLog(next, `${army.name} [${KINGDOMS[army.owner].name}] recovered ${recovered} soldiers in ${city.name} (${army.troops}/${army.maxTroops}).`);
   }
   for (const owner of ['france', 'castile', 'norway']) next = enemyTurn(next, owner);
   next = barbarianTurn(next);

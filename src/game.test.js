@@ -133,7 +133,7 @@ test('autoplay attacks nearby discovered enemies and avoids friendly units', () 
 
   game = createGame();
   game.cities.find(city => city.id === 'london').owner = null;
-  game.armies.push({ id: 'ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 60, units: 5, moves: 0 });
+  game.armies.push({ id: 'ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 60, maxTroops: 60, units: 5, moves: 0 });
   const result = autoplayStep(game);
   assert.notDeepEqual(result.position, { x: 50, y: 49 });
   assert.equal(result.state.armies.filter(unit => unit.owner === 'england').length, 2);
@@ -159,14 +159,15 @@ test('autoplay waits for resources to rebuild after losing its army', () => {
 
 test('friendly armies merge with both limits and the lower remaining movement', () => {
   let game = createGame();
-  game.armies.push({ id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 180, units: 4, moves: 1 });
+  game.armies.push({ id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 180, maxTroops: 180, units: 4, moves: 1 });
   game = moveUnit(game, 'army-1', 50, 49);
   const merged = game.armies.find(unit => unit.id === 'ally');
   assert.deepEqual([merged.troops, merged.units, merged.moves], [300, 5, 1]);
+  assert.equal(merged.maxTroops, 300);
   assert.equal(game.armies.some(unit => unit.id === 'army-1'), false);
 
   game = createGame();
-  const ally = { id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 181, units: 1, moves: 3 };
+  const ally = { id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 181, maxTroops: 181, units: 1, moves: 3 };
   game.armies.push(ally);
   assert.equal(moveUnit(game, 'army-1', 50, 49), game);
   ally.troops = 60;
@@ -205,7 +206,87 @@ test('all generated settlements are reachable on land', () => {
       queue.push([nx, ny]);
     }
   }
-  for (const city of game.cities) assert.ok(seen.has(`${city.x},${city.y}`), city.name);
+  for (const city of game.cities) {
+    assert.notEqual(terrainAt(city.x, city.y), 'water', city.name);
+    assert.ok(seen.has(`${city.x},${city.y}`), city.name);
+  }
+});
+
+test('the world contains more lakes and mountains while retaining passable land', () => {
+  const counts = { water: 0, mountain: 0 };
+  for (let y = 0; y < MAP_SIZE; y++) {
+    for (let x = 0; x < MAP_SIZE; x++) {
+      const terrain = terrainAt(x, y);
+      if (terrain in counts) counts[terrain]++;
+    }
+  }
+  assert.ok(counts.water >= 400 && counts.water < 1000);
+  assert.ok(counts.mountain >= 500 && counts.mountain < 1500);
+});
+
+test('garrisoned armies recover a tenth of full strength for free, up to their capacity', () => {
+  let game = createGame(12);
+  game = moveUnit(game, 'army-1', 50, 49);
+  game = recruit(game, 'london');
+  const levy = game.armies.find(unit => unit.id === 'army-2');
+  assert.equal(levy.maxTroops, 60);
+  levy.troops = 20;
+  game.armies = [levy];
+  game.cities = game.cities.filter(city => city.id === 'london');
+  const before = game;
+  game = endTurn(game);
+  assert.equal(game.armies[0].troops, 26);
+  assert.equal(before.armies[0].troops, 20);
+  assert.deepEqual(game.resources.england, { gold: before.resources.england.gold + 50, food: before.resources.england.food + 45 });
+  assert.equal(game.cities[0].population, before.cities[0].population + 120);
+  assert.ok(game.log.some(entry => entry.includes('recovered 6 soldiers in London')));
+  game = endTurn(game);
+  assert.equal(game.armies[0].troops, 32);
+  game.armies[0].troops = 59;
+  game = endTurn(game);
+  assert.equal(game.armies.find(unit => unit.id === levy.id).troops, 60);
+});
+
+test('only armies in friendly cities recover, including rival armies', () => {
+  const game = createGame(12);
+  const guard = game.armies[0];
+  Object.assign(guard, { x: 50, y: 49, troops: 20 });
+  game.armies.push({ id: 'scout', name: 'Scout', owner: 'england', kind: 'scout', x: 49, y: 49, troops: 10, units: 1, moves: 0 });
+  const rival = game.armies.find(unit => unit.owner === 'france');
+  rival.troops = 20;
+  const next = endTurn(game);
+  assert.equal(next.armies.find(unit => unit.id === guard.id).troops, 20);
+  assert.equal(next.armies.find(unit => unit.id === 'scout').troops, 10);
+  assert.equal(next.armies.find(unit => unit.id === rival.id).troops, 30);
+});
+
+test('a garrison recovers before barbarians attack', () => {
+  const game = createGame(12);
+  const guard = game.armies[0];
+  guard.troops = 20;
+  game.armies = [guard, { id: 'raiders', name: 'Barbarian raiders', owner: 'barbarian', kind: 'barbarian', x: 50, y: 49, troops: 25, units: 1, moves: 0 }];
+  const next = endTurn(game);
+  assert.equal(next.armies.find(unit => unit.id === guard.id).troops, 7);
+  assert.equal(next.armies.some(unit => unit.id === 'raiders'), false);
+  assert.equal(next.cities.find(city => city.id === 'london').defense, 40);
+});
+
+test('merged damaged armies recover according to combined full strength', () => {
+  let game = createGame(12);
+  game.armies[0].troops = 70;
+  game.armies.push({ id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 50, maxTroops: 180, units: 3, moves: 3 });
+  game = moveUnit(game, 'army-1', 50, 49);
+  const merged = game.armies.find(unit => unit.id === 'ally');
+  assert.equal(merged.maxTroops, 300);
+  game = moveUnit(game, 'ally', 49, 49);
+  game = endTurn(game);
+  assert.equal(game.armies.find(unit => unit.id === 'ally').troops, 150);
+
+  game = createGame(12);
+  game.armies[0].troops = 70;
+  game.armies.push({ id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 50, maxTroops: 240, units: 3, moves: 3 });
+  game = moveUnit(game, 'army-1', 50, 49);
+  assert.equal(game.armies.find(unit => unit.id === 'ally').maxTroops, 300);
 });
 
 test('autoplay routes around water to conquer a known settlement', () => {
@@ -234,7 +315,7 @@ test('autoplay merges a levy into a nearby friendly army', () => {
   const game = createGame();
   game.cities.find(city => city.id === 'london').owner = null;
   game.armies[0].moves = 0;
-  game.armies.push({ id: 'levy', name: 'Levy', owner: 'england', kind: 'army', x: 50, y: 49, troops: 60, units: 1, moves: 3 });
+  game.armies.push({ id: 'levy', name: 'Levy', owner: 'england', kind: 'army', x: 50, y: 49, troops: 60, maxTroops: 60, units: 1, moves: 3 });
   const next = autoplayStep(game).state;
   assert.equal(next.armies.some(unit => unit.id === 'levy'), false);
   assert.deepEqual([next.armies[0].troops, next.armies[0].units, next.armies[0].moves], [180, 2, 0]);
@@ -285,7 +366,7 @@ test('new armies can receive a level-one general, but scouts do not', () => {
 test('merges preserve either general and reject two generals', () => {
   let game = createGame(1);
   const general = game.armies[0].general;
-  const ally = { id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 60, units: 1, moves: 3 };
+  const ally = { id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 60, maxTroops: 60, units: 1, moves: 3 };
   game.armies.push(ally);
   let merged = moveUnit(game, 'army-1', 50, 49);
   assert.deepEqual(merged.armies.find(unit => unit.id === 'ally').general, general);
@@ -372,7 +453,7 @@ test('a garrison battles raiders and its general earns experience on victory', (
 
 test('raiders loot a city after defeating its garrison', () => {
   const game = createGame(12);
-  game.armies.find(unit => unit.id === 'army-1').troops = 10;
+  Object.assign(game.armies.find(unit => unit.id === 'army-1'), { troops: 10, maxTroops: 10 });
   game.armies.push({ id: 'raiders', name: 'Barbarian raiders', owner: 'barbarian', kind: 'barbarian', x: 50, y: 49, troops: 60, units: 1, moves: 0 });
   const next = endTurn(game);
   assert.equal(next.armies.some(unit => unit.id === 'army-1' || unit.id === 'raiders'), false);
@@ -396,7 +477,7 @@ test('chronicle retains turn-stamped history and starting capitals', () => {
 test('chronicle records off-screen battles and raid losses with their turn', () => {
   const game = createGame(12);
   const defender = game.armies.find(unit => unit.owner === 'france');
-  defender.troops = 10;
+  Object.assign(defender, { troops: 10, maxTroops: 10 });
   game.armies.push({ id: 'raiders', name: 'Barbarian raiders', owner: 'barbarian', kind: 'barbarian', x: 21, y: 22, troops: 60, units: 1, moves: 0 });
   assert.equal(isDiscovered(game, 20, 22), false);
   const next = endTurn(game);
