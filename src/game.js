@@ -16,9 +16,52 @@ const cityNames = ['Ashford', 'Westhaven', 'Oakheart', 'Rivermouth', 'Stonebridg
 const firstNames = ['Alden', 'Beatrice', 'Cedric', 'Diana', 'Edmund', 'Freya', 'Gareth', 'Helena', 'Isabel', 'Jonas', 'Leona', 'Rowan', 'Matilda', 'Oswald', 'Elise', 'Victor'];
 const lastNames = ['Ashford', 'Blackwood', 'Caldwell', 'Drake', 'Fairfax', 'Hawthorne', 'Langley', 'Mercer', 'Northwood', 'Ravenscroft', 'Sterling', 'Thorne', 'Valen', 'Westbrook', 'Wilder', 'York'];
 const generalSkills = ['fighting', 'captain', 'charisma'];
+const cityLevels = [
+  { population: 0, buildings: ['Farm', 'Market', 'Palisade'], gold: 25, food: 20, growth: 80, defense: 20 },
+  { population: 500, buildings: ['Farm', 'Market', 'Palisade', 'Guildhall'], gold: 35, food: 30, growth: 100, defense: 30 },
+  { population: 1000, buildings: ['Farm', 'Market', 'Palisade', 'Guildhall', 'Bank'], gold: 50, food: 45, growth: 120, defense: 40 },
+  { population: 2000, buildings: ['Farm', 'Market', 'Palisade', 'Guildhall', 'Bank', 'Stone walls'], gold: 70, food: 60, growth: 150, defense: 50 },
+];
 const key = (x, y) => `${x},${y}`;
 const distance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+
+export function cityDevelopment(city) {
+  const index = cityLevels.findLastIndex(level => city.population >= level.population);
+  const level = cityLevels[index];
+  return { ...level, level: index + 1, nextPopulation: cityLevels[index + 1]?.population ?? null };
+}
+
+export function kingdomPopulation(state, owner) {
+  return state.cities.filter(city => city.owner === owner).reduce((total, city) => total + city.population, 0);
+}
+
+export function regionAt(cities, x, y) {
+  return cities.reduce((closest, city) => !closest || Math.abs(city.x - x) + Math.abs(city.y - y) < Math.abs(closest.x - x) + Math.abs(closest.y - y) ? city : closest, null);
+}
+
+export function kingdomStandings(state) {
+  const land = Object.fromEntries(KINGDOM_OWNERS.map(owner => [owner, 0]));
+  for (let y = 0; y < MAP_SIZE; y++) {
+    for (let x = 0; x < MAP_SIZE; x++) {
+      const owner = regionAt(state.cities, x, y)?.owner;
+      if (owner && owner in land) land[owner]++;
+    }
+  }
+  return KINGDOM_OWNERS.map(owner => {
+    const cities = state.cities.filter(city => city.owner === owner);
+    const population = kingdomPopulation(state, owner);
+    const production = cities.reduce((total, city) => {
+      const development = cityDevelopment(city);
+      return total + development.gold + development.food;
+    }, 0);
+    const economic = state.resources[owner].gold + state.resources[owner].food + population + production * 10;
+    const military = state.armies.filter(army => army.owner === owner).reduce((total, army) => total + army.troops, 0)
+      + cities.reduce((total, city) => total + city.defense, 0);
+    const landScore = land[owner] * 10;
+    return { owner, economic, military, land: landScore, total: economic + military + landScore };
+  }).sort((a, b) => b.total - a.total);
+}
 
 export function terrainAt(x, y) {
   const n = Math.abs(Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1;
@@ -84,6 +127,10 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
       cities.push({ id: `town-${i}`, name, x: cx, y: cy, owner: null });
       i++;
     }
+    for (const city of cities) {
+      city.population = city.capital ? 1200 : 300;
+      city.defense = cityDevelopment(city).defense;
+    }
   }
   const armies = [
     { id: 'army-1', name: 'Royal Guard', owner: 'england', kind: 'army', x: 49, y: 49, troops: 120, units: 1, moves: MOVE_RANGE },
@@ -96,7 +143,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
     turn: 1,
     cities,
     armies,
-    resources: Object.fromEntries(KINGDOM_OWNERS.map(owner => [owner, { gold: 180, food: 150, population: 1200 }])),
+    resources: Object.fromEntries(KINGDOM_OWNERS.map(owner => [owner, { gold: 180, food: 150 }])),
     discovered: {},
     nextId: 2,
     nextGeneralId: 1,
@@ -132,6 +179,24 @@ function addLog(state, message) {
   state.log.unshift(`Turn ${state.turn}: ${message}`);
 }
 
+function changePopulation(state, city, population) {
+  const old = cityDevelopment(city);
+  city.population = Math.max(0, population);
+  const current = cityDevelopment(city);
+  if (current.level !== old.level) {
+    city.defense = clamp(city.defense + Math.max(0, current.defense - old.defense), 0, current.defense);
+    addLog(state, `${city.name} ${current.level > old.level ? 'reached' : 'fell to'} level ${current.level} (${city.population} population). Buildings: ${current.buildings.join(', ')}.`);
+  }
+}
+
+function promoteGeneral(state, army) {
+  if (!army.general) return;
+  const skill = generalSkills[randomInt(state, generalSkills.length)];
+  army.general.level++;
+  army.general.skills[skill]++;
+  addLog(state, `${army.general.name} reached level ${army.general.level} (+1 ${skill}).`);
+}
+
 function resolveArrival(state, army) {
   const enemy = state.armies.find(other => other.id !== army.id && other.owner !== army.owner && other.x === army.x && other.y === army.y);
   if (enemy) {
@@ -145,21 +210,30 @@ function resolveArrival(state, army) {
     const city = state.cities.find(place => place.x === army.x && place.y === army.y);
     const describe = unit => `${unit.name} [${KINGDOMS[unit.owner].name}]${unit.general ? ` (General ${unit.general.name})` : ''}`;
     addLog(state, `${describe(army)} attacked ${describe(enemy)} at ${city ? `${city.name} ` : ''}(${army.x + 1}, ${army.y + 1}): ${attackerStrength} vs ${defenderStrength}. ${describe(winner)} defeated ${describe(loser)} with ${winner.troops} remaining; ${loser.general ? `General ${loser.general.name} was lost.` : 'the defeated force was destroyed.'}`);
-    if (winner.general) {
-      const skill = generalSkills[randomInt(state, generalSkills.length)];
-      winner.general.level++;
-      winner.general.skills[skill]++;
-      addLog(state, `${winner.general.name} reached level ${winner.general.level} (+1 ${skill}).`);
-    }
+    promoteGeneral(state, winner);
     if (!attackerWins) return;
   }
   const city = state.cities.find(place => place.x === army.x && place.y === army.y);
+  if (city && city.owner !== army.owner && (city.owner || army.kind === 'army') && city.defense > 0) {
+    const strength = army.troops;
+    const defense = city.defense;
+    if (strength <= defense) {
+      city.defense = Math.max(1, defense - strength);
+      state.armies = state.armies.filter(unit => unit.id !== army.id);
+      addLog(state, `${army.name} [${KINGDOMS[army.owner].name}] attacked ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}. The city held with ${city.defense} defense remaining${army.general ? `; General ${army.general.name} was lost` : ''}.`);
+      return;
+    }
+    army.troops -= defense;
+    city.defense = 0;
+    addLog(state, `${army.name} [${KINGDOMS[army.owner].name}] breached ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}, with ${army.troops} troops remaining.`);
+    promoteGeneral(state, army);
+  }
   if (city?.owner && army.owner === 'barbarian') {
     const resources = state.resources[city.owner];
-    const lost = { gold: Math.min(resources.gold, 30), food: Math.min(resources.food, 20), population: Math.min(resources.population, 50) };
+    const lost = { gold: Math.min(resources.gold, 30), food: Math.min(resources.food, 20), population: Math.min(city.population, 50) };
     resources.gold = Math.max(0, resources.gold - 30);
     resources.food = Math.max(0, resources.food - 20);
-    resources.population = Math.max(0, resources.population - 50);
+    changePopulation(state, city, city.population - lost.population);
     addLog(state, `Barbarians raided ${city.name} (${city.x + 1}, ${city.y + 1}), owned by ${KINGDOMS[city.owner].name}, costing ${lost.gold} gold, ${lost.food} food and ${lost.population} population.`);
     state.armies = state.armies.filter(unit => unit.id !== army.id);
     return;
@@ -225,7 +299,7 @@ function recruitForOwner(state, cityId, owner, kind = 'army', allowAdjacent = fa
   const city = state.cities.find(place => place.id === cityId && place.owner === owner);
   const cost = kind === 'scout' ? { gold: 30, food: 15, population: 20 } : { gold: 60, food: 40, population: 60 };
   const resources = state.resources[owner];
-  if (!city || !['army', 'scout'].includes(kind) || Object.entries(cost).some(([resource, amount]) => resources[resource] < amount)) return state;
+  if (!city || !['army', 'scout'].includes(kind) || resources.gold < cost.gold || resources.food < cost.food || city.population < cost.population) return state;
   const occupant = state.armies.find(army => army.x === city.x && army.y === city.y);
   let position = city;
   if (occupant) {
@@ -237,7 +311,10 @@ function recruitForOwner(state, cityId, owner, kind = 'army', allowAdjacent = fa
     if (!position) return state;
   }
   const next = copyState(state);
-  for (const [resource, amount] of Object.entries(cost)) next.resources[owner][resource] -= amount;
+  next.resources[owner].gold -= cost.gold;
+  next.resources[owner].food -= cost.food;
+  const recruitingCity = next.cities.find(place => place.id === cityId);
+  changePopulation(next, recruitingCity, recruitingCity.population - cost.population);
   const army = { id: `army-${next.nextId++}`, name: kind === 'scout' ? 'Rangers' : owner === 'england' ? 'New Levy' : `${KINGDOMS[owner].name} levy`, owner, kind, x: position.x, y: position.y, troops: kind === 'scout' ? 20 : 60, units: 1, moves: 0 };
   if (kind === 'army' && randomInt(next, 2) === 0) army.general = createGeneral(next);
   next.armies.push(army);
@@ -329,11 +406,14 @@ export function endTurn(state) {
   let next = copyState(state);
   next.turn++;
   addLog(next, `Turn ${next.turn} begins. Your cities have produced resources.`);
-  for (const owner of KINGDOM_OWNERS) {
-    const cityCount = next.cities.filter(city => city.owner === owner).length;
-    next.resources[owner].gold += cityCount * 25;
-    next.resources[owner].food += cityCount * 20;
-    next.resources[owner].population += cityCount * 80;
+  for (const city of next.cities) {
+    if (city.owner) {
+      const development = cityDevelopment(city);
+      next.resources[city.owner].gold += development.gold;
+      next.resources[city.owner].food += development.food;
+      changePopulation(next, city, city.population + development.growth);
+    }
+    city.defense = cityDevelopment(city).defense;
   }
   for (const owner of ['france', 'castile', 'norway']) next = enemyTurn(next, owner);
   next = barbarianTurn(next);
