@@ -1,5 +1,5 @@
 import React from "react";
-import { TROOP_TYPES } from "../game.js";
+import { generalBonuses, TROOP_TYPES } from "../game.js";
 import CityDevelopment from "./CityDevelopment.jsx";
 import { Icon } from "./Visuals.jsx";
 
@@ -14,6 +14,7 @@ export default function SelectedDetails({
   onRecruit,
   onSelectCity,
 }) {
+  const bonuses = generalBonuses(unit?.general);
   const cityOccupant =
     city && game.armies.find((army) => army.x === city.x && army.y === city.y);
 
@@ -79,7 +80,8 @@ export default function SelectedDetails({
                 ))}
               </div>
               <small className="general-hint">
-                Skills do not affect combat yet.
+                Fighting +{bonuses.attack}% attack · Captain {10 + bonuses.recovery}% recovery ·
+                Charisma +{bonuses.growth}% garrison city growth
               </small>
             </div>
           ) : (
@@ -215,7 +217,7 @@ export default function SelectedDetails({
       {unit?.kind === "army" && (
         <p className="recruit-hint">
           Full strength: {unit.maxTroops} soldiers. In a friendly settlement,
-          armies recover 10% of full strength each turn for free.
+          this army recovers {10 + bonuses.recovery}% of full strength each turn for free.
         </p>
       )}
       {unit?.general && (
