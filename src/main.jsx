@@ -77,7 +77,7 @@ function Standings({ game, onClose }) {
 
   return <dialog ref={dialog} className="standings-dialog" aria-labelledby="standings-title" onCancel={event => { event.preventDefault(); close(); }}>
     <div className="chronicle-header"><div><div className="selection-tag">THE CONTEST FOR THE WORLD</div><h2 id="standings-title">Kingdom Standings</h2><p>Live rankings for all kingdoms, including unexplored territory.</p></div><button className="chronicle-close" onClick={close} aria-label="Close standings" autoFocus>×</button></div>
-    <div className="standings-table-wrap"><table className="standings-table"><thead><tr><th>Rank / Kingdom</th><th>Economic</th><th>Military</th><th>Land</th><th>Total</th></tr></thead><tbody>{standings.map(row => <tr key={row.owner}><th scope="row"><span className="rank">{standings.findIndex(other => other.total === row.total) + 1}</span><span className="standings-kingdom"><i style={{ background: KINGDOMS[row.owner].color }}/>{KINGDOMS[row.owner].name}{row.owner === 'england' && ' (You)'}</span></th><td>{row.economic.toLocaleString()}</td><td>{row.military.toLocaleString()}</td><td>{row.land.toLocaleString()}</td><td><strong>{row.total.toLocaleString()}</strong></td></tr>)}</tbody></table></div>
+    <div className="standings-table-wrap"><table className="standings-table"><thead><tr><th>Rank / Kingdom</th><th>Economic</th><th>Military</th><th>Land</th><th>Total</th></tr></thead><tbody>{standings.map(row => <tr key={row.owner}><th scope="row"><span className="rank">{standings.findIndex(other => other.total === row.total) + 1}</span><span className="standings-kingdom"><i style={{ background: KINGDOMS[row.owner].color }}/>{KINGDOMS[row.owner].name}{row.owner === 'england' && ' (You)'}<small>Ruler: {game.rulers[row.owner]}</small></span></th><td>{row.economic.toLocaleString()}</td><td>{row.military.toLocaleString()}</td><td>{row.land.toLocaleString()}</td><td><strong>{row.total.toLocaleString()}</strong></td></tr>)}</tbody></table></div>
     <div className="score-explanation"><strong>How scores work</strong><p>Economic = gold + food + city population + 10 × gold and food produced per turn. Military = troops + current city defenses. Land = 10 × controlled map tiles. Total is the sum of all three scores.</p></div>
   </dialog>;
 }
@@ -217,7 +217,7 @@ function App() {
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><Icon name="crown" size={23}/></div><div><strong>CROWN <span>&</span></strong><small>FRONTIER</small></div></div>
       <div className="sidebar-label">YOUR CAMPAIGN</div>
-      <div className="kingdom-card"><div className="crest"><Icon name="crown" size={25}/></div><div><strong>Kingdom of England</strong><small>Your sovereign realm</small></div></div>
+      <div className="kingdom-card"><div className="crest"><Icon name="crown" size={25}/></div><div><strong>Kingdom of {KINGDOMS.england.name}</strong><small>Ruler: {game.rulers.england}</small></div></div>
       <div className="sidebar-section"><div className="section-heading">KINGDOM OVERVIEW <span>01</span></div>
         <div className="overview-row"><Icon name="flag" size={16}/> <span>Settlements</span><strong>{ownedCities.length}</strong></div>
         <div className="overview-row"><Icon name="sword" size={16}/> <span>Units</span><strong>{playerUnits.length}</strong></div>

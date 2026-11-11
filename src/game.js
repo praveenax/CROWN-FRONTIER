@@ -4,17 +4,17 @@ export const MOVE_RANGE = 3;
 export const MAX_TROOPS = 300;
 export const MAX_MERGED_UNITS = 5;
 export const KINGDOMS = {
-  england: { name: 'England', color: '#cfaa67', capital: 'London' },
-  france: { name: 'France', color: '#78a4bb', capital: 'Paris' },
-  castile: { name: 'Castile', color: '#c97d66', capital: 'Toledo' },
-  norway: { name: 'Norway', color: '#a995c0', capital: 'Bergen' },
+  england: { name: 'Alderwyn', color: '#cfaa67', capital: 'London' },
+  france: { name: 'Valoria', color: '#78a4bb', capital: 'Paris' },
+  castile: { name: 'Karthaine', color: '#c97d66', capital: 'Toledo' },
+  norway: { name: 'Eirengard', color: '#a995c0', capital: 'Bergen' },
   barbarian: { name: 'Barbarians', color: '#9e4f43' },
 };
 const KINGDOM_OWNERS = ['england', 'france', 'castile', 'norway'];
 
 const cityNames = ['Ashford', 'Westhaven', 'Oakheart', 'Rivermouth', 'Stonebridge', 'Highmere', 'Dunwich', 'Eldham', 'Northwatch', 'Rosehaven', 'Whitmoor', 'Greenford', 'Fairhaven', 'Thornfield', 'Bracken', 'Redwater', 'Kingswell', 'Alderwick', 'Greyford', 'Eastmere', 'Millhaven', 'Foxhollow', 'Westerly', 'Pinehurst', 'Blackmere', 'Hawkridge', 'Larkspur', 'Goldcrest', 'Havenwood', 'Briarfield', 'Longford', 'Winterfell'];
-const firstNames = ['Alden', 'Beatrice', 'Cedric', 'Diana', 'Edmund', 'Freya', 'Gareth', 'Helena', 'Isabel', 'Jonas', 'Leona', 'Rowan', 'Matilda', 'Oswald', 'Elise', 'Victor'];
-const lastNames = ['Ashford', 'Blackwood', 'Caldwell', 'Drake', 'Fairfax', 'Hawthorne', 'Langley', 'Mercer', 'Northwood', 'Ravenscroft', 'Sterling', 'Thorne', 'Valen', 'Westbrook', 'Wilder', 'York'];
+const firstNames = ['Alden', 'Beatrice', 'Cedric', 'Diana', 'Edmund', 'Freya', 'Gareth', 'Helena', 'Isabel', 'Jonas', 'Leona', 'Rowan', 'Matilda', 'Oswald', 'Elise', 'Victor', 'Adrian', 'Aelira', 'Alaric', 'Amara', 'Ansel', 'Aria', 'Bastian', 'Brenna', 'Calista', 'Corin', 'Darian', 'Elara', 'Emrys', 'Evelyn', 'Fenric', 'Gwendolyn', 'Hadrian', 'Ilyana', 'Jasper', 'Kaelen', 'Liora', 'Lucian', 'Mira', 'Nolan', 'Odessa', 'Orin', 'Rhiannon', 'Selene', 'Seraphina', 'Tavian', 'Thea', 'Tristan', 'Valeria', 'Wystan'];
+const lastNames = ['Ashford', 'Blackwood', 'Caldwell', 'Drake', 'Fairfax', 'Hawthorne', 'Langley', 'Mercer', 'Northwood', 'Ravenscroft', 'Sterling', 'Thorne', 'Valen', 'Westbrook', 'Wilder', 'York', 'Aldercrest', 'Amberfall', 'Arden', 'Briarwood', 'Brightmoor', 'Cindervale', 'Corven', 'Dawnridge', 'Duskwood', 'Everwinter', 'Falken', 'Frostmere', 'Goldwyn', 'Greycastle', 'Harrow', 'Ironwood', 'Kingsley', 'Larkspur', 'Mooncrest', 'Morrow', 'Oakenshield', 'Ravenwood', 'Redwyne', 'Rookwood', 'Silvermere', 'Skyhaven', 'Stormwind', 'Sundale', 'Thornvale', 'Vallen', 'Waverly', 'Whitehall', 'Windermere', 'Winterbourne'];
 const generalSkills = ['fighting', 'captain', 'charisma'];
 const cityLevels = [
   { population: 0, buildings: ['Farm', 'Market', 'Palisade'], gold: 25, food: 20, growth: 80, defense: 20 },
@@ -95,8 +95,7 @@ function randomInt(state, max) {
   return Math.floor(state.randomSeed / 4294967296 * max);
 }
 
-function createGeneral(state) {
-  const usedNames = new Set(state.armies.filter(army => army.general).map(army => army.general.name));
+function createPersonName(state, usedNames) {
   const combinations = firstNames.length * lastNames.length;
   const start = randomInt(state, combinations);
   let name;
@@ -105,6 +104,15 @@ function createGeneral(state) {
     name = `${firstNames[Math.floor(index / lastNames.length)]} ${lastNames[index % lastNames.length]}`;
     if (!usedNames.has(name)) break;
   }
+  return name;
+}
+
+function createGeneral(state) {
+  const usedNames = new Set([
+    ...state.armies.filter(army => army.general).map(army => army.general.name),
+    ...Object.values(state.rulers),
+  ]);
+  const name = createPersonName(state, usedNames);
   return { id: `general-${state.nextGeneralId++}`, name, level: 1, skills: { fighting: 1, captain: 1, charisma: 1 } };
 }
 
@@ -144,6 +152,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
     cities,
     armies,
     resources: Object.fromEntries(KINGDOM_OWNERS.map(owner => [owner, { gold: 180, food: 150 }])),
+    rulers: {},
     discovered: {},
     nextId: 2,
     nextGeneralId: 1,
@@ -151,9 +160,16 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
     log: [],
   };
   state.armies[0].general = createGeneral(state);
+  const rulerRandom = { randomSeed: (seed ^ 0x9e3779b9) >>> 0 };
+  const usedNames = new Set([state.armies[0].general.name]);
+  for (const owner of KINGDOM_OWNERS) {
+    const name = createPersonName(rulerRandom, usedNames);
+    state.rulers[owner] = name;
+    usedNames.add(name);
+  }
   addLog(state, 'A new chapter begins. Your kingdom awaits.');
   for (const city of cities.filter(place => place.capital)) {
-    addLog(state, `${KINGDOMS[city.owner].name} established its capital at ${city.name} (${city.x + 1}, ${city.y + 1}).`);
+    addLog(state, `${KINGDOMS[city.owner].name} established its capital at ${city.name} (${city.x + 1}, ${city.y + 1}), ruled by ${state.rulers[city.owner]}.`);
   }
   addLog(state, `${state.armies[0].general.name} leads the Royal Guard in London.`);
   revealPlayer(state);
@@ -469,7 +485,7 @@ export function autoplayStep(state) {
   const playerUnits = state.armies.filter(unit => unit.owner === 'england');
   const playerCities = state.cities.filter(city => city.owner === 'england');
   if (!playerUnits.length && !playerCities.length) {
-    return { state, stopped: 'Autoplay stopped: England has no settlements or units.' };
+    return { state, stopped: `Autoplay stopped: ${KINGDOMS.england.name} has no settlements or units.` };
   }
   if (!state.cities.some(city => city.owner !== 'england') && !state.armies.some(unit => unit.owner !== 'england')) {
     return { state, stopped: 'Autoplay stopped: all settlements are under your control.' };

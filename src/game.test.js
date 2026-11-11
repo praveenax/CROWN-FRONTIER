@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { autoplayStep, cameraFor, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, MAP_SIZE, moveCamera, moveUnit, recruit, terrainAt, VIEW_SIZE } from './game.js';
+import { autoplayStep, cameraFor, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, moveCamera, moveUnit, recruit, terrainAt, VIEW_SIZE } from './game.js';
 
 test('creates the world with four kingdoms, fog, and a bounded viewport', () => {
   const game = createGame();
@@ -12,6 +12,29 @@ test('creates the world with four kingdoms, fog, and a bounded viewport', () => 
   assert.equal(isDiscovered(game, 0, 0), false);
   assert.deepEqual(cameraFor(99, 99), { x: 92, y: 92 });
   assert.deepEqual(moveCamera({ x: 0, y: 0 }, -1, -1), { x: 0, y: 0 });
+});
+
+test('each kingdom receives a distinct, seeded ruler that persists through turns', () => {
+  const firstNames = new Set();
+  const lastNames = new Set();
+  for (let i = 0; i < 100; i++) {
+    const seed = Math.imul(i, 2654435761) >>> 0;
+    const game = createGame(seed);
+    const rulers = Object.values(game.rulers);
+    assert.equal(rulers.length, 4);
+    assert.equal(new Set([...rulers, game.armies[0].general.name]).size, 5);
+    assert.deepEqual(createGame(seed).rulers, game.rulers);
+    for (const ruler of rulers) {
+      assert.match(ruler, /^\w+ \w+$/);
+      const [first, last] = ruler.split(' ');
+      firstNames.add(first);
+      lastNames.add(last);
+    }
+  }
+  assert.ok(firstNames.size > 16);
+  assert.ok(lastNames.size > 16);
+  const game = createGame(12);
+  assert.deepEqual(endTurn(game).rulers, game.rulers);
 });
 
 test('movement is adjacent, limited per turn, reveals land and claims towns', () => {
@@ -246,6 +269,8 @@ test('new armies can receive a level-one general, but scouts do not', () => {
   assert.ok(general);
   assert.notEqual(general.id, startingGeneral.id);
   assert.notEqual(general.name, startingGeneral.name);
+  game.rulers.england = general.name;
+  assert.notEqual(recruit(game, 'london').armies.find(unit => unit.id === 'army-2').general.name, general.name);
   game.randomSeed = 1000;
   assert.equal(recruit(game, 'london').armies.find(unit => unit.id === 'army-2').general, undefined);
   game.randomSeed = 0;
@@ -360,8 +385,8 @@ test('raiders loot a city after defeating its garrison', () => {
 test('chronicle retains turn-stamped history and starting capitals', () => {
   let game = createGame(12);
   const firstEntries = [...game.log];
-  assert.ok(firstEntries.some(entry => entry.includes('Turn 1: England established its capital at London')));
-  assert.ok(firstEntries.some(entry => entry.includes('France established its capital at Paris')));
+  assert.ok(firstEntries.some(entry => entry.includes(`Turn 1: ${KINGDOMS.england.name} established its capital at London`) && entry.includes(game.rulers.england)));
+  assert.ok(firstEntries.some(entry => entry.includes(`${KINGDOMS.france.name} established its capital at Paris`) && entry.includes(game.rulers.france)));
   for (let turn = 0; turn < 10; turn++) game = endTurn(game);
   assert.ok(game.log.length > 8);
   assert.deepEqual(game.log.slice(-firstEntries.length), firstEntries);
@@ -375,9 +400,9 @@ test('chronicle records off-screen battles and raid losses with their turn', () 
   game.armies.push({ id: 'raiders', name: 'Barbarian raiders', owner: 'barbarian', kind: 'barbarian', x: 21, y: 22, troops: 60, units: 1, moves: 0 });
   assert.equal(isDiscovered(game, 20, 22), false);
   const next = endTurn(game);
-  const battle = next.log.find(entry => entry.includes('attacked France host [France]'));
+  const battle = next.log.find(entry => entry.includes(`attacked ${KINGDOMS.france.name} host [${KINGDOMS.france.name}]`));
   assert.match(battle, /Turn 2: .*Paris \(21, 23\): 60 vs 10.*50 remaining/);
-  assert.ok(next.log.some(entry => /Turn 2: Barbarians raided Paris.*owned by France.*30 gold, 20 food and 50 population/.test(entry)));
+  assert.ok(next.log.some(entry => entry.includes(`owned by ${KINGDOMS.france.name}`) && /Turn 2: Barbarians raided Paris.*30 gold, 20 food and 50 population/.test(entry)));
   assert.ok(next.log.indexOf(battle) < next.log.findIndex(entry => entry.includes('Turn 2 begins')));
 });
 
