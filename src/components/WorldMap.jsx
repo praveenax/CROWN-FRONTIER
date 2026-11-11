@@ -1,5 +1,5 @@
 import React from "react";
-import { canMoveUnit, KINGDOMS, moveCamera, VIEW_SIZE } from "../game.js";
+import { canMoveUnit, moveCamera, VIEW_SIZE } from "../game.js";
 import { Icon, TownArt } from "./Visuals.jsx";
 
 export default function WorldMap({
@@ -58,7 +58,7 @@ export default function WorldMap({
                 className={`tile ${tile.revealed ? tile.terrain : "fog"} ${reachable ? "reachable" : ""} ${selectedTile ? "selected" : ""}`}
                 style={
                   owner
-                    ? { "--region-color": KINGDOMS[owner].color }
+                    ? { "--region-color": game.kingdoms[owner].color }
                     : undefined
                 }
                 aria-label={`${tile.x + 1}, ${tile.y + 1}: ${tile.revealed ? `${tile.place?.name || tile.terrain}${tile.occupant ? `, ${tile.occupant.name}` : ""}` : "unexplored"}${merging ? ", merge" : reachable ? ", reachable" : ""}`}
@@ -86,7 +86,7 @@ export default function WorldMap({
                       <span
                         className={`unit-marker ${tile.occupant.owner === "england" ? "friendly" : "enemy"}`}
                         style={{
-                          "--unit-color": KINGDOMS[tile.occupant.owner].color,
+                          "--unit-color": game.kingdoms[tile.occupant.owner].color,
                         }}
                       >
                         <Icon
@@ -109,7 +109,7 @@ export default function WorldMap({
       <div className="map-footer">
         <div className="legend">
           <span>
-            <i className="legend-dot england" /> Your kingdom
+            <i className="legend-dot" style={{ background: game.kingdoms.england.color }} /> Your kingdom
           </span>
           <span>
             <i className="legend-dot neutral" /> Neutral settlement
@@ -130,7 +130,7 @@ export default function WorldMap({
         <div className="map-nav">
           <button
             onClick={() =>
-              onCameraChange((current) => moveCamera(current, -1, 0))
+              onCameraChange((current) => moveCamera(current, -1, 0, game.mapSize))
             }
             aria-label="Pan map left"
           >
@@ -138,7 +138,7 @@ export default function WorldMap({
           </button>
           <button
             onClick={() =>
-              onCameraChange((current) => moveCamera(current, 0, -1))
+              onCameraChange((current) => moveCamera(current, 0, -1, game.mapSize))
             }
             aria-label="Pan map up"
           >
@@ -146,7 +146,7 @@ export default function WorldMap({
           </button>
           <button
             onClick={() =>
-              onCameraChange((current) => moveCamera(current, 0, 1))
+              onCameraChange((current) => moveCamera(current, 0, 1, game.mapSize))
             }
             aria-label="Pan map down"
           >
@@ -154,7 +154,7 @@ export default function WorldMap({
           </button>
           <button
             onClick={() =>
-              onCameraChange((current) => moveCamera(current, 1, 0))
+              onCameraChange((current) => moveCamera(current, 1, 0, game.mapSize))
             }
             aria-label="Pan map right"
           >

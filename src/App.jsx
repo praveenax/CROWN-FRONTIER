@@ -16,6 +16,7 @@ import {
   resolveWorldEvent,
   worldEventChoices,
 } from "./game.js";
+import CampaignSetup from "./components/CampaignSetup.jsx";
 import CampaignHeader from "./components/CampaignHeader.jsx";
 import ChronicleDialog from "./components/ChronicleDialog.jsx";
 import GameOverScreen from "./components/GameOverScreen.jsx";
@@ -27,8 +28,29 @@ import WorldMap from "./components/WorldMap.jsx";
 import WorldOverview from "./components/WorldOverview.jsx";
 
 export default function App() {
-  const [game, setGame] = useState(createGame);
-  const [camera, setCamera] = useState(() => cameraFor(49, 49));
+  const [settings, setSettings] = useState(null);
+  const [playing, setPlaying] = useState(false);
+
+  if (playing)
+    return <Campaign settings={settings} onRestart={() => setPlaying(false)} />;
+
+  return (
+    <CampaignSetup
+      initialSettings={settings}
+      onStart={(next) => {
+        setSettings(next);
+        setPlaying(true);
+      }}
+    />
+  );
+}
+
+function Campaign({ settings, onRestart }) {
+  const [game, setGame] = useState(() => createGame(undefined, settings));
+  const { mapSize } = game;
+  const [camera, setCamera] = useState(() =>
+    cameraFor(game.armies[0].x, game.armies[0].y, mapSize),
+  );
   const [selected, setSelected] = useState({ type: "unit", id: "army-1" });
   const [notice, setNotice] = useState("");
   const [playMode, setPlayMode] = useState(null);
@@ -91,12 +113,12 @@ export default function App() {
       }[event.key];
       if (direction) {
         event.preventDefault();
-        setCamera((current) => moveCamera(current, ...direction));
+        setCamera((current) => moveCamera(current, ...direction, mapSize));
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [mapSize]);
 
   useEffect(() => {
     if (!autoplay) return;
@@ -123,7 +145,7 @@ export default function App() {
           return;
         }
         if (result.position && playMode === "normal") {
-          setCamera(cameraFor(result.position.x, result.position.y));
+          setCamera(cameraFor(result.position.x, result.position.y, mapSize));
           setSelected(
             result.state.armies.some((army) => army.id === result.unitId)
               ? { type: "unit", id: result.unitId }
@@ -134,7 +156,7 @@ export default function App() {
       playMode === "fast" ? 10 : 500,
     );
     return () => window.clearTimeout(timer);
-  }, [playMode, game, autoplay]);
+  }, [playMode, game, autoplay, mapSize]);
 
   function clickTile(tile) {
     if (game.gameOver) return;
@@ -219,24 +241,16 @@ export default function App() {
     setNotice("");
   }
 
-  function restartGame() {
-    const next = createGame();
-    setGame(next);
-    setCamera(cameraFor(49, 49));
-    setSelected({ type: "unit", id: "army-1" });
-    setPlayMode(null);
-    setNotice("");
-  }
 
   function focusUnit(target) {
     setSelected({ type: "unit", id: target.id });
-    setCamera(cameraFor(target.x, target.y));
+    setCamera(cameraFor(target.x, target.y, mapSize));
     setNotice("");
   }
 
   function focusCity(target) {
     setSelected({ type: "city", id: target.id });
-    setCamera(cameraFor(target.x, target.y));
+    setCamera(cameraFor(target.x, target.y, mapSize));
     setNotice("");
   }
 
@@ -331,7 +345,7 @@ export default function App() {
         <GameOverScreen
           game={game}
           events={game.logEvents}
-          onRestart={restartGame}
+          onRestart={onRestart}
           onOpenChronicle={() => setShowChronicle(true)}
         />
       )}

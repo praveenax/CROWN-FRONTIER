@@ -1,5 +1,5 @@
 import React from "react";
-import { KINGDOMS, regionAt } from "../game.js";
+import { regionAt } from "../game.js";
 
 export default function WorldOverview({
   game,
@@ -12,15 +12,15 @@ export default function WorldOverview({
       <section className="minimap-panel">
         <div className="detail-heading">
           <span>POLITICAL MAP</span>
-          <span className="mini-label">100 × 100</span>
+          <span className="mini-label">{game.mapSize} × {game.mapSize}</span>
         </div>
         <svg
           className="minimap"
-          viewBox="0 0 100 100"
+          viewBox={`0 0 ${game.mapSize} ${game.mapSize}`}
           role="img"
           aria-label="Political map of discovered world"
         >
-          <rect width="100" height="100" fill="#25342c" />
+          <rect width={game.mapSize} height={game.mapSize} fill="#25342c" />
           {Object.keys(game.discovered).map((key) => {
             const [x, y] = key.split(",").map(Number);
             const owner = regionAt(game.cities, x, y)?.owner;
@@ -31,10 +31,10 @@ export default function WorldOverview({
                 y={y}
                 width="1"
                 height="1"
-                fill={owner ? KINGDOMS[owner].color : "#788475"}
+                fill={owner ? game.kingdoms[owner].color : "#788475"}
               >
                 <title>
-                  {owner ? KINGDOMS[owner].name : "Neutral territory"}
+                  {owner ? game.kingdoms[owner].name : "Neutral territory"}
                 </title>
               </rect>
             );
@@ -50,12 +50,10 @@ export default function WorldOverview({
           />
         </svg>
         <div className="minimap-legend">
-          {Object.entries(KINGDOMS)
-            .filter(([owner]) => owner !== "barbarian")
-            .map(([owner, kingdom]) => (
+          {game.kingdomOwners.map((owner) => (
               <span key={owner}>
-                <i style={{ background: kingdom.color }} />
-                {kingdom.name}
+                <i style={{ background: game.kingdoms[owner].color }} />
+                {game.kingdoms[owner].name}
               </span>
             ))}
         </div>
@@ -63,7 +61,7 @@ export default function WorldOverview({
           <span>
             <i className="legend-dot england" /> Current view
           </span>
-          <span>{(explored / 100).toFixed(1)}% explored</span>
+          <span>{(explored * 100 / game.mapSize ** 2).toFixed(1)}% explored</span>
         </div>
       </section>
       <section className="activity-panel">

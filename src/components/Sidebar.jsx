@@ -1,5 +1,5 @@
 import React from "react";
-import { KINGDOMS, TROOP_TYPES } from "../game.js";
+import { TROOP_TYPES } from "../game.js";
 import { Icon } from "./Visuals.jsx";
 
 export default function Sidebar({
@@ -33,7 +33,7 @@ export default function Sidebar({
           <Icon name="crown" size={25} />
         </div>
         <div>
-          <strong>Kingdom of {KINGDOMS.england.name}</strong>
+          <strong>{game.kingdoms.england.name}</strong>
           <small>Ruler: {game.rulers.england}</small>
         </div>
       </div>
@@ -51,7 +51,7 @@ export default function Sidebar({
         </div>
         <div className="overview-row">
           <Icon name="eye" size={16} /> <span>World explored</span>
-          <strong>{(explored / 100).toFixed(1)}%</strong>
+          <strong>{(explored * 100 / game.mapSize ** 2).toFixed(1)}%</strong>
         </div>
       </div>
       <div className="sidebar-section">

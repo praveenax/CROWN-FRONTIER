@@ -1,6 +1,6 @@
 # Crown & Frontier
 
-A single-player, turn-based kingdom strategy prototype. The world is a deterministic 100 × 100 grid, viewed eight tiles at a time.
+A single-player, turn-based kingdom strategy prototype. The world is a deterministic grid, viewed eight tiles at a time.
 
 ## Run
 
@@ -16,6 +16,10 @@ Open the address printed by Vite. Run `npm test` for the game logic tests or `np
 ## Editing game data
 
 Edit [src/data.json](./src/data.json) to change kingdom names and colors, troop stats and costs, city development tiers, buildings, generated names and lakes, map settings, or the starting campaign setup. The game reads this file when it starts; restart or refresh the page after editing.
+
+## Campaign setup
+
+Choose a 64 × 64, 100 × 100, or 144 × 144 map and one to three rival kingdoms. Set the name and color of each active kingdom, then select **Start campaign**. Starting a new campaign after victory or defeat returns to setup with your previous choices filled in.
 
 ## How to play
 
@@ -43,7 +47,7 @@ Edit [src/data.json](./src/data.json) to change kingdom names and colors, troop 
 - Select **Autoplay** beside End turn to watch your kingdom issue orders and advance turns automatically. It keeps an army on each owned city when possible, explores, fights, merges and claims settlements. Autoplay and rival kingdoms can recruit beside a garrisoned city, up to four mobile armies plus one formation per owned city. Manual recruitment still requires an empty city. The map follows each action. Pause autoplay to resume manual control.
 - Select **Fast Play** to run the same automatic orders much faster without following each action on the map. Pause it or switch to Autoplay at any time.
 - Win by claiming every settlement and defeating all rival forces, including raiders. You lose when both your last settlement and your last army are gone. The game then pauses and offers a new campaign.
-- Select **Standings** to compare all four kingdoms, including information beyond the fog. Economic score is treasury gold + food + city population + ten times gold and food production per turn. Military score is army and scout troops plus current city defenses. Land score is ten times the number of map tiles controlled by owned settlements, including water. Total score is the sum of these three scores; the highest total leads.
+- Select **Standings** to compare all active kingdoms, including information beyond the fog. Economic score is treasury gold + food + city population + ten times gold and food production per turn. Military score is army and scout troops plus current city defenses. Land score is ten times the number of map tiles controlled by owned settlements, including water. Total score is the sum of these three scores; the highest total leads.
 - Select **Show All** in the Chronicle to view and copy campaign history, including after the campaign ends. The default condensed view groups routine movement, recruitment, recovery, production, and minor raid events between major events; switch to **Full detail** for every recorded entry. Both views include events from all kingdoms beyond the fog. AI orders describe the target selected for that step, not a persistent strategy; manual moves are labeled separately. An operation ID links a single arrival's combat, breach, raid, and capture, while stable general and settlement IDs distinguish namesakes. Select a general or city to see recent history; the full log retains general losses and earlier events. City history tracks owners and occupation start turns; captures report completed turns held, retained population/buildings, and the actual change in production ownership. Nothing happens to rulers or treasuries on capture. History lasts for the current campaign and resets on refresh.
 - The fog shows only explored tiles. Explored tiles remain visible; this prototype does not yet distinguish current line of sight from previously explored territory.
 
