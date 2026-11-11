@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cameraFor, createGame, endTurn, isDiscovered, MAP_SIZE, moveCamera, moveUnit, recruit, VIEW_SIZE } from './game.js';
+import { autoplayStep, cameraFor, createGame, endTurn, isDiscovered, MAP_SIZE, moveCamera, moveUnit, recruit, VIEW_SIZE } from './game.js';
 
 test('creates the world with four kingdoms, fog, and a bounded viewport', () => {
   const game = createGame();
@@ -76,4 +76,49 @@ test('opponents expand and scout vision reaches farther than army vision', () =>
   game = endTurn(game);
   game = moveUnit(game, 'army-2', 49, 48);
   assert.equal(isDiscovered(game, 49, 45), true);
+});
+
+test('autoplay explores, conquers, recruits and advances the turn using normal rules', () => {
+  let game = createGame();
+  for (let step = 0; step < 60 && game.cities.find(city => city.id === 'ashford').owner !== 'england'; step++) {
+    const result = autoplayStep(game);
+    assert.equal(result.stopped, undefined);
+    game = result.state;
+  }
+  assert.equal(game.cities.find(city => city.id === 'ashford').owner, 'england');
+  assert.ok(game.turn > 1);
+  assert.ok(game.armies.some(unit => unit.id === 'army-2'));
+});
+
+test('autoplay attacks nearby discovered enemies and avoids friendly units', () => {
+  let game = createGame();
+  const enemy = game.armies.find(unit => unit.owner === 'france');
+  Object.assign(enemy, { x: 50, y: 49, troops: 50 });
+  game = autoplayStep(game).state;
+  assert.equal(game.armies.some(unit => unit.owner === 'france'), false);
+  assert.equal(game.armies.find(unit => unit.id === 'army-1').troops, 70);
+
+  game = createGame();
+  game.armies.push({ id: 'ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 60, moves: 0 });
+  const result = autoplayStep(game);
+  assert.notDeepEqual(result.position, { x: 50, y: 49 });
+  assert.equal(result.state.armies.filter(unit => unit.owner === 'england').length, 2);
+});
+
+test('autoplay stops on defeat or complete conquest', () => {
+  const game = createGame();
+  game.cities.forEach(city => { if (city.owner === 'england') city.owner = 'france'; });
+  game.armies = game.armies.filter(unit => unit.owner !== 'england');
+  assert.match(autoplayStep(game).stopped, /no settlements or units/);
+  game.cities.forEach(city => { city.owner = 'england'; });
+  game.armies = [];
+  assert.match(autoplayStep(game).stopped, /all settlements/);
+});
+
+test('autoplay waits for resources to rebuild after losing its army', () => {
+  let game = createGame();
+  game.armies = game.armies.filter(unit => unit.owner !== 'england');
+  game.resources.england = { gold: 0, food: 0, population: 0 };
+  for (let step = 0; step < 5; step++) game = autoplayStep(game).state;
+  assert.ok(game.armies.some(unit => unit.owner === 'england'));
 });

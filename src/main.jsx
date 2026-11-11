@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { cameraFor, createGame, endTurn, isDiscovered, KINGDOMS, MAP_SIZE, moveCamera, moveUnit, recruit, terrainAt, VIEW_SIZE } from './game.js';
+import { autoplayStep, cameraFor, createGame, endTurn, isDiscovered, KINGDOMS, moveCamera, moveUnit, recruit, terrainAt, VIEW_SIZE } from './game.js';
 import './styles.css';
 
 function Icon({ name, size = 20, className = '' }) {
@@ -36,6 +36,7 @@ function App() {
   const [camera, setCamera] = useState(() => cameraFor(49, 49));
   const [selected, setSelected] = useState({ type: 'unit', id: 'army-1' });
   const [notice, setNotice] = useState('');
+  const [autoplay, setAutoplay] = useState(false);
   const unit = selected?.type === 'unit' ? game.armies.find(a => a.id === selected.id) : null;
   const city = selected?.type === 'city' ? game.cities.find(c => c.id === selected.id) : null;
   const ownedCities = game.cities.filter(c => c.owner === 'england');
@@ -66,13 +67,31 @@ function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  useEffect(() => {
+    if (!autoplay) return;
+    const timer = window.setTimeout(() => {
+      const result = autoplayStep(game);
+      if (result.stopped) {
+        setAutoplay(false);
+        setNotice(result.stopped);
+        return;
+      }
+      setGame(result.state);
+      if (result.position) {
+        setCamera(cameraFor(result.position.x, result.position.y));
+        setSelected(result.state.armies.some(army => army.id === result.unitId) ? { type: 'unit', id: result.unitId } : null);
+      }
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [autoplay, game]);
+
   function clickTile(tile) {
     setNotice('');
     if (unit && unit.x === tile.x && unit.y === tile.y) {
       setSelected(tile.place ? { type: 'city', id: tile.place.id } : null);
       return;
     }
-    if (unit && unit.owner === 'england' && Math.abs(unit.x - tile.x) + Math.abs(unit.y - tile.y) === 1 && unit.moves > 0) {
+    if (!autoplay && unit && unit.owner === 'england' && Math.abs(unit.x - tile.x) + Math.abs(unit.y - tile.y) === 1 && unit.moves > 0) {
       const next = moveUnit(game, unit.id, tile.x, tile.y);
       if (next !== game) {
         setGame(next);
@@ -121,11 +140,11 @@ function App() {
     <main className="main">
       <header className="topbar"><div className="breadcrumb">CAMPAIGN <span>/</span> <b>THE KNOWN WORLD</b></div><div className="top-right"><div className="resource"><Icon name="gold"/><span><b>{resources.gold.toLocaleString()}</b><small>GOLD</small></span></div><div className="resource"><Icon name="food"/><span><b>{resources.food.toLocaleString()}</b><small>FOOD</small></span></div><div className="resource"><Icon name="people"/><span><b>{resources.population.toLocaleString()}</b><small>POPULATION</small></span></div><div className="turn-chip"><small>CURRENT TURN</small><b>{String(game.turn).padStart(2, '0')}</b></div></div></header>
       <div className="content">
-        <div className="page-heading"><div><div className="eyebrow"><span/> YOUR KINGDOM AWAITS</div><h1>The Known World</h1><p>Explore the frontier, grow your kingdom, and make your mark.</p></div><button className="end-turn" onClick={() => { setGame(endTurn(game)); setNotice(''); }}><span>End turn <small>Let the world advance</small></span><span className="end-arrow">→</span></button></div>
+        <div className="page-heading"><div><div className="eyebrow"><span/> YOUR KINGDOM AWAITS</div><h1>The Known World</h1><p>Explore the frontier, grow your kingdom, and make your mark.</p></div><div className="turn-actions"><button className={`autoplay-button ${autoplay ? 'running' : ''}`} aria-pressed={autoplay} onClick={() => { setAutoplay(!autoplay); setNotice(''); }}><span>{autoplay ? 'Pause autoplay' : 'Autoplay'}<small>{autoplay ? 'Take back control' : 'Watch your kingdom'}</small></span><span className="autoplay-icon" aria-hidden="true">{autoplay ? 'Ⅱ' : '▶'}</span></button><button className="end-turn" disabled={autoplay} onClick={() => { setGame(endTurn(game)); setNotice(''); }}><span>End turn <small>Let the world advance</small></span><span className="end-arrow">→</span></button></div></div>
         <div className="workspace">
           <section className="map-panel"><div className="panel-header"><div><div className="panel-title"><span className="gold-dot"/> WORLD MAP <span className="subtle">/</span> <span className="subtle">THE FRONTIER</span></div><div className="panel-subtitle">A world of opportunity lies beyond the fog.</div></div><div className="map-coordinates">VIEW <b>{camera.x + 1}–{camera.x + 8} / {camera.y + 1}–{camera.y + 8}</b></div></div>
             <div className="map-wrap"><div className="map-grid" role="grid" aria-label="World map, eight by eight tiles">{tiles.map(tile => {
-              const reachable = unit?.owner === 'england' && unit.moves > 0 && tile.occupant?.owner !== 'england' && Math.abs(unit.x - tile.x) + Math.abs(unit.y - tile.y) === 1;
+              const reachable = !autoplay && unit?.owner === 'england' && unit.moves > 0 && tile.occupant?.owner !== 'england' && Math.abs(unit.x - tile.x) + Math.abs(unit.y - tile.y) === 1;
               const selectedTile = (unit && unit.x === tile.x && unit.y === tile.y) || (city && city.x === tile.x && city.y === tile.y);
               const owner = tile.region?.owner;
               return <button role="gridcell" key={`${tile.x}-${tile.y}`} onClick={() => clickTile(tile)} className={`tile ${tile.revealed ? tile.terrain : 'fog'} ${reachable ? 'reachable' : ''} ${selectedTile ? 'selected' : ''}`} style={owner ? { '--region-color': KINGDOMS[owner].color } : undefined} aria-label={`${tile.x + 1}, ${tile.y + 1}: ${tile.revealed ? `${tile.place?.name || tile.terrain}${tile.occupant ? `, ${tile.occupant.name}` : ''}` : 'unexplored'}${reachable ? ', reachable' : ''}`}>
@@ -137,8 +156,8 @@ function App() {
           </section>
           <aside className="right-column">
             <section className="detail-panel"><div className="detail-heading"><span>SELECTED</span><Icon name="crosshair" size={16}/></div>
-              {unit ? <><div className="selection-icon"><Icon name={unit.kind === 'scout' ? 'eye' : 'sword'} size={26}/></div><div className="selection-tag">{unit.owner === 'england' ? 'YOUR FORCES' : KINGDOMS[unit.owner].name.toUpperCase()}</div><h2>{unit.name}</h2><p>{unit.kind === 'scout' ? 'A light-footed party, ready to reveal the unknown.' : 'A loyal host standing ready to defend and expand the realm.'}</p><div className="detail-stats"><div><small>STRENGTH</small><b>{unit.troops} <span>{unit.kind === 'scout' ? 'scouts' : 'soldiers'}</span></b></div><div><small>MOVEMENT</small><b>{unit.moves} <span>/ 3 tiles</span></b></div></div>{unit.owner === 'england' && <div className="instruction"><span>✦</span> Select an adjacent highlighted tile to move. Armies claim settlements; scouts reveal more land.</div>}{game.cities.some(c => c.x === unit.x && c.y === unit.y) && <button className="secondary-button" onClick={() => setSelected({ type: 'city', id: game.cities.find(c => c.x === unit.x && c.y === unit.y).id })}>View settlement <span>→</span></button>}</>
-                : city ? <><div className="selection-icon"><Icon name="flag" size={26}/></div><div className="selection-tag">{city.owner ? KINGDOMS[city.owner].name.toUpperCase() : 'NEUTRAL SETTLEMENT'}</div><h2>{city.name}</h2><p>{city.owner === 'england' ? 'A settlement under your banner. It produces resources each turn.' : 'Send an army here to claim this settlement for your kingdom.'}</p><div className="detail-stats"><div><small>POSITION</small><b>{city.x + 1}, {city.y + 1}</b></div><div><small>STATUS</small><b>{city.capital ? 'Capital' : 'Town'}</b></div></div>{city.owner === 'england' && <><button className="secondary-button" onClick={() => doRecruit('army')}>Raise army <span>60 gold · 40 food · 60 people</span></button><button className="secondary-button" onClick={() => doRecruit('scout')}>Recruit scouts <span>30 gold · 15 food · 20 people</span></button><small className="recruit-hint">The city tile must be unoccupied. New units move next turn.</small></>}</>
+              {unit ? <><div className="selection-icon"><Icon name={unit.kind === 'scout' ? 'eye' : 'sword'} size={26}/></div><div className="selection-tag">{unit.owner === 'england' ? 'YOUR FORCES' : KINGDOMS[unit.owner].name.toUpperCase()}</div><h2>{unit.name}</h2><p>{unit.kind === 'scout' ? 'A light-footed party, ready to reveal the unknown.' : 'A loyal host standing ready to defend and expand the realm.'}</p><div className="detail-stats"><div><small>STRENGTH</small><b>{unit.troops} <span>{unit.kind === 'scout' ? 'scouts' : 'soldiers'}</span></b></div><div><small>MOVEMENT</small><b>{unit.moves} <span>/ 3 tiles</span></b></div></div>{unit.owner === 'england' && <div className="instruction"><span>✦</span> {autoplay ? 'Autoplay is issuing orders. Pause to move your units manually.' : 'Select an adjacent highlighted tile to move. Armies claim settlements; scouts reveal more land.'}</div>}{game.cities.some(c => c.x === unit.x && c.y === unit.y) && <button className="secondary-button" onClick={() => setSelected({ type: 'city', id: game.cities.find(c => c.x === unit.x && c.y === unit.y).id })}>View settlement <span>→</span></button>}</>
+                : city ? <><div className="selection-icon"><Icon name="flag" size={26}/></div><div className="selection-tag">{city.owner ? KINGDOMS[city.owner].name.toUpperCase() : 'NEUTRAL SETTLEMENT'}</div><h2>{city.name}</h2><p>{city.owner === 'england' ? 'A settlement under your banner. It produces resources each turn.' : 'Send an army here to claim this settlement for your kingdom.'}</p><div className="detail-stats"><div><small>POSITION</small><b>{city.x + 1}, {city.y + 1}</b></div><div><small>STATUS</small><b>{city.capital ? 'Capital' : 'Town'}</b></div></div>{city.owner === 'england' && <><button className="secondary-button" disabled={autoplay} onClick={() => doRecruit('army')}>Raise army <span>60 gold · 40 food · 60 people</span></button><button className="secondary-button" disabled={autoplay} onClick={() => doRecruit('scout')}>Recruit scouts <span>30 gold · 15 food · 20 people</span></button><small className="recruit-hint">The city tile must be unoccupied. New units move next turn.</small></>}</>
                   : <><div className="selection-icon"><Icon name="crosshair" size={26}/></div><div className="selection-tag">AWAITING ORDERS</div><h2>Choose your next move</h2><p>Select an army or a settlement on the map to see its details and available actions.</p></>}
               {notice && <div className="notice" role="alert">{notice}</div>}
             </section>

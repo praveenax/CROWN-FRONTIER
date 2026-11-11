@@ -181,6 +181,60 @@ export function endTurn(state) {
   return next;
 }
 
+function findAutoStep(state, unit, isTarget) {
+  const blocked = new Set(state.armies.filter(other => other.owner === 'england' && other.id !== unit.id).map(other => key(other.x, other.y)));
+  const visited = new Set([key(unit.x, unit.y)]);
+  const queue = [{ x: unit.x, y: unit.y, first: null }];
+  for (let index = 0; index < queue.length; index++) {
+    const current = queue[index];
+    if (current.first && isTarget(current.x, current.y)) return current.first;
+    for (const [dx, dy] of [[1, 0], [0, -1], [-1, 0], [0, 1]]) {
+      const x = current.x + dx;
+      const y = current.y + dy;
+      const position = key(x, y);
+      if (x < 0 || y < 0 || x >= MAP_SIZE || y >= MAP_SIZE || visited.has(position) || blocked.has(position)) continue;
+      visited.add(position);
+      queue.push({ x, y, first: current.first || { x, y } });
+    }
+  }
+  return null;
+}
+
+export function autoplayStep(state) {
+  const playerUnits = state.armies.filter(unit => unit.owner === 'england');
+  const playerCities = state.cities.filter(city => city.owner === 'england');
+  if (!playerUnits.length && !playerCities.length) {
+    return { state, stopped: 'Autoplay stopped: England has no settlements or units.' };
+  }
+  if (!state.cities.some(city => city.owner !== 'england') && !state.armies.some(unit => unit.owner !== 'england')) {
+    return { state, stopped: 'Autoplay stopped: all settlements are under your control.' };
+  }
+
+  for (const unit of playerUnits) {
+    if (unit.moves < 1) continue;
+    const enemies = state.armies.filter(other => other.owner !== 'england' && isDiscovered(state, other.x, other.y) && distance(unit, other) <= 8);
+    const towns = unit.kind === 'army' ? state.cities.filter(city => city.owner !== 'england' && isDiscovered(state, city.x, city.y)) : [];
+    const positions = items => new Set(items.map(item => key(item.x, item.y)));
+    const enemyPositions = positions(enemies);
+    const townPositions = positions(towns);
+    const step = (enemies.length && findAutoStep(state, unit, (x, y) => enemyPositions.has(key(x, y))))
+      || (towns.length && findAutoStep(state, unit, (x, y) => townPositions.has(key(x, y))))
+      || findAutoStep(state, unit, (x, y) => !isDiscovered(state, x, y));
+    if (step) {
+      const next = moveUnit(state, unit.id, step.x, step.y);
+      return { state: next, unitId: unit.id, position: step };
+    }
+  }
+
+  if (playerUnits.filter(unit => unit.kind === 'army').length < 3) {
+    for (const city of playerCities) {
+      const next = recruit(state, city.id);
+      if (next !== state) return { state: next, unitId: `army-${state.nextId}`, position: city };
+    }
+  }
+  return { state: endTurn(state) };
+}
+
 export function cameraFor(x, y) {
   return { x: clamp(x - Math.floor(VIEW_SIZE / 2), 0, MAP_SIZE - VIEW_SIZE), y: clamp(y - Math.floor(VIEW_SIZE / 2), 0, MAP_SIZE - VIEW_SIZE) };
 }
