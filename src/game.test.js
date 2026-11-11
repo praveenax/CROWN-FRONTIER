@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { autoplayStep, buildBuilding, cameraFor, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, moveCamera, moveUnit, recruit, terrainAt, TROOP_TYPES, VIEW_SIZE } from './game.js';
+import { autoplayStep, buildBuilding, cameraFor, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, MAX_MERGED_UNITS, MAX_TROOPS, moveCamera, moveUnit, recruit, terrainAt, TROOP_TYPES, VIEW_SIZE } from './game.js';
 
 test('creates the world with four kingdoms, fog, and a bounded viewport', () => {
   const game = createGame();
@@ -177,7 +177,7 @@ test('opponents collect and spend resources while keeping a garrison', () => {
 });
 
 test('opponents expand and scout vision reaches farther than army vision', () => {
-  let game = createGame();
+  let game = createGame(12);
   for (let turn = 0; turn < 10; turn++) game = endTurn(game);
   assert.ok(game.cities.filter(city => city.owner === 'france').length > 1);
 
@@ -214,7 +214,7 @@ test('autoplay attacks nearby discovered enemies and avoids friendly units', () 
 
   game = createGame();
   game.cities.find(city => city.id === 'london').owner = null;
-  game.armies.push({ id: 'ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 60, maxTroops: 60, units: 5, moves: 0 });
+  game.armies.push({ id: 'ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 60, maxTroops: 60, units: MAX_MERGED_UNITS, moves: 0 });
   const result = autoplayStep(game);
   assert.notDeepEqual(result.position, { x: 50, y: 49 });
   assert.equal(result.state.armies.filter(unit => unit.owner === 'england').length, 2);
@@ -240,19 +240,19 @@ test('autoplay waits for resources to rebuild after losing its army', () => {
 
 test('friendly armies merge with both limits and the lower remaining movement', () => {
   let game = createGame();
-  game.armies.push({ id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 180, maxTroops: 180, units: 4, moves: 1 });
+  game.armies.push({ id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: MAX_TROOPS - 120, maxTroops: MAX_TROOPS - 120, units: MAX_MERGED_UNITS - 1, moves: 1 });
   game = moveUnit(game, 'army-1', 50, 49);
   const merged = game.armies.find(unit => unit.id === 'ally');
-  assert.deepEqual([merged.troops, merged.units, merged.moves], [300, 5, 1]);
-  assert.equal(merged.maxTroops, 300);
+  assert.deepEqual([merged.troops, merged.units, merged.moves], [MAX_TROOPS, MAX_MERGED_UNITS, 1]);
+  assert.equal(merged.maxTroops, MAX_TROOPS);
   assert.equal(game.armies.some(unit => unit.id === 'army-1'), false);
 
   game = createGame();
-  const ally = { id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 181, maxTroops: 181, units: 1, moves: 3 };
+  const ally = { id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: MAX_TROOPS - 119, maxTroops: MAX_TROOPS - 119, units: 1, moves: 3 };
   game.armies.push(ally);
   assert.equal(moveUnit(game, 'army-1', 50, 49), game);
   ally.troops = 60;
-  ally.units = 5;
+  ally.units = MAX_MERGED_UNITS;
   assert.equal(moveUnit(game, 'army-1', 50, 49), game);
   ally.units = 1;
   ally.kind = 'scout';
@@ -365,9 +365,9 @@ test('merged damaged armies recover according to combined full strength', () => 
 
   game = createGame(12);
   game.armies[0].troops = 70;
-  game.armies.push({ id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 50, maxTroops: 240, units: 3, moves: 3 });
+  game.armies.push({ id: 'ally', name: 'Ally', owner: 'england', kind: 'army', x: 50, y: 49, troops: 50, maxTroops: MAX_TROOPS - 119, units: 3, moves: 3 });
   game = moveUnit(game, 'army-1', 50, 49);
-  assert.equal(game.armies.find(unit => unit.id === 'ally').maxTroops, 300);
+  assert.equal(game.armies.find(unit => unit.id === 'ally').maxTroops, MAX_TROOPS);
 });
 
 test('autoplay routes around water to conquer a known settlement', () => {
