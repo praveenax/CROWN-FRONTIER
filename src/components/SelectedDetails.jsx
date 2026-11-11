@@ -1,7 +1,5 @@
-import {
-  KINGDOMS,
-  TROOP_TYPES,
-} from "../game.js";
+import React from "react";
+import { KINGDOMS, TROOP_TYPES } from "../game.js";
 import CityDevelopment from "./CityDevelopment.jsx";
 import { Icon } from "./Visuals.jsx";
 
@@ -195,9 +193,8 @@ export default function SelectedDetails({
                 Recruit scouts <span>30 gold · 15 food · 20 people</span>
               </button>
               <small className="recruit-hint">
-                Recruitment uses this city's population. Its tile must be
-                empty; new units move next turn. Only identical troop types can
-                merge.
+                Recruitment uses this city's population. Its tile must be empty;
+                new units move next turn. Only identical troop types can merge.
               </small>
             </>
           )}

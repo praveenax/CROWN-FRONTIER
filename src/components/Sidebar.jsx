@@ -1,3 +1,4 @@
+import React from "react";
 import { KINGDOMS, TROOP_TYPES } from "../game.js";
 import { Icon } from "./Visuals.jsx";
 
@@ -91,8 +92,7 @@ export default function Sidebar({
       </div>
       <div className="sidebar-section">
         <div className="section-heading">
-          YOUR FORCES{" "}
-          <span>{String(playerUnits.length).padStart(2, "0")}</span>
+          YOUR FORCES <span>{String(playerUnits.length).padStart(2, "0")}</span>
         </div>
         <div className="forces">
           {playerUnits.map((army) => (
@@ -102,7 +102,10 @@ export default function Sidebar({
               className={`force-row ${unit?.id === army.id ? "active" : ""}`}
             >
               <span className="force-icon">
-                <Icon name={army.kind === "scout" ? "eye" : "sword"} size={16} />
+                <Icon
+                  name={army.kind === "scout" ? "eye" : "sword"}
+                  size={16}
+                />
               </span>
               <span>
                 <strong>{army.name}</strong>
@@ -120,8 +123,7 @@ export default function Sidebar({
       </div>
       <div className="sidebar-section">
         <div className="section-heading">
-          YOUR GENERALS{" "}
-          <span>{String(generals.length).padStart(2, "0")}</span>
+          YOUR GENERALS <span>{String(generals.length).padStart(2, "0")}</span>
         </div>
         <div
           className="forces settlements"

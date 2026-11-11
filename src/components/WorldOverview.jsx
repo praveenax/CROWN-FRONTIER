@@ -1,3 +1,4 @@
+import React from "react";
 import { KINGDOMS, regionAt } from "../game.js";
 
 export default function WorldOverview({

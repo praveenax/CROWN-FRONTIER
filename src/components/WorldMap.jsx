@@ -1,3 +1,4 @@
+import React from "react";
 import { canMoveUnit, KINGDOMS, moveCamera, VIEW_SIZE } from "../game.js";
 import { Icon, TownArt } from "./Visuals.jsx";
 
@@ -56,7 +57,9 @@ export default function WorldMap({
                 onClick={() => onTileClick(tile)}
                 className={`tile ${tile.revealed ? tile.terrain : "fog"} ${reachable ? "reachable" : ""} ${selectedTile ? "selected" : ""}`}
                 style={
-                  owner ? { "--region-color": KINGDOMS[owner].color } : undefined
+                  owner
+                    ? { "--region-color": KINGDOMS[owner].color }
+                    : undefined
                 }
                 aria-label={`${tile.x + 1}, ${tile.y + 1}: ${tile.revealed ? `${tile.place?.name || tile.terrain}${tile.occupant ? `, ${tile.occupant.name}` : ""}` : "unexplored"}${merging ? ", merge" : reachable ? ", reachable" : ""}`}
               >

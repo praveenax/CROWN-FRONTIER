@@ -1,3 +1,4 @@
+import React from "react";
 import { BUILDINGS, cityDevelopment } from "../game.js";
 
 export default function CityDevelopment({

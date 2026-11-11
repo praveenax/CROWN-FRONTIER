@@ -1,3 +1,4 @@
+import React from "react";
 export function Icon({ name, size = 20, className = "" }) {
   const paths = {
     crown: (

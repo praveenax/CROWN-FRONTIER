@@ -39,3 +39,4 @@ button:focus-visible{outline:2px solid #e6c17c;outline-offset:2px}
 .building-option:focus-visible{outline:2px solid #a68c55;outline-offset:2px}
 .minimap-legend{display:flex;flex-wrap:wrap;gap:6px 9px;margin-top:9px;color:#899888;font-size:8px}.minimap-legend span{display:flex;align-items:center;gap:4px}.minimap-legend i{width:6px;height:6px;border-radius:50%;flex:none}
 .chronicle-toolbar select{border:1px solid #dfe5d6;background:#f5f5ec;color:#405642;padding:7px;margin-left:5px;font:inherit}.history-detail{border-top:1px solid #e5e7db;margin-top:14px;padding-top:10px}.history-detail small{color:#98a494;font-size:8px;font-weight:700;letter-spacing:.5px}.history-detail p{font-size:10px;margin-top:5px;overflow-wrap:anywhere}.game-over-chronicle{margin-top:12px}@media(max-width:620px){.chronicle-toolbar{flex-wrap:wrap}}
+.game-over-copy-status{min-height:14px;color:#879385!important;font-size:10px!important;line-height:1.4;margin:8px 0!important}

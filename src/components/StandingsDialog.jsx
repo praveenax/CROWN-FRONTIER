@@ -1,3 +1,4 @@
+import React from "react";
 import { useEffect, useMemo, useRef } from "react";
 import { kingdomStandings, KINGDOMS } from "../game.js";
 

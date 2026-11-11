@@ -317,9 +317,10 @@ export default function App() {
           onClose={() => setShowStandings(false)}
         />
       )}
-      {game.gameOver && (
+      {game.gameOver && !showChronicle && (
         <GameOverScreen
           game={game}
+          events={game.logEvents}
           onRestart={restartGame}
           onOpenChronicle={() => setShowChronicle(true)}
         />
