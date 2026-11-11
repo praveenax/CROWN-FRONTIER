@@ -126,6 +126,12 @@ function App() {
     setNotice('');
   }
 
+  function focusCity(target) {
+    setSelected({ type: 'city', id: target.id });
+    setCamera(cameraFor(target.x, target.y));
+    setNotice('');
+  }
+
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><Icon name="crown" size={23}/></div><div><strong>CROWN <span>&</span></strong><small>FRONTIER</small></div></div>
@@ -135,6 +141,9 @@ function App() {
         <div className="overview-row"><Icon name="flag" size={16}/> <span>Settlements</span><strong>{ownedCities.length}</strong></div>
         <div className="overview-row"><Icon name="sword" size={16}/> <span>Units</span><strong>{playerUnits.length}</strong></div>
         <div className="overview-row"><Icon name="eye" size={16}/> <span>World explored</span><strong>{(explored / 100).toFixed(1)}%</strong></div>
+      </div>
+      <div className="sidebar-section"><div className="section-heading">YOUR SETTLEMENTS <span>{String(ownedCities.length).padStart(2, '0')}</span></div>
+        <div className="forces settlements" role="group" aria-label="Your settlements">{ownedCities.length ? ownedCities.map(place => <button key={place.id} onClick={() => focusCity(place)} aria-pressed={city?.id === place.id} className={`force-row ${city?.id === place.id ? 'active' : ''}`}><span className="force-icon"><Icon name="flag" size={16}/></span><span><strong>{place.name}</strong><small>{place.capital ? 'Capital' : 'Town'} · {place.x + 1}, {place.y + 1}</small></span><Icon name="chevron" size={15}/></button>) : <div className="settlements-empty">No settlements held</div>}</div>
       </div>
       <div className="sidebar-section"><div className="section-heading">YOUR FORCES <span>{String(playerUnits.length).padStart(2, '0')}</span></div>
         <div className="forces">{playerUnits.map(a => <button key={a.id} onClick={() => focusUnit(a)} className={`force-row ${unit?.id === a.id ? 'active' : ''}`}><span className="force-icon"><Icon name={a.kind === 'scout' ? 'eye' : 'sword'} size={16}/></span><span><strong>{a.name}</strong><small>{a.troops} {a.kind === 'scout' ? 'scouts' : 'soldiers'}</small></span><Icon name="chevron" size={15}/></button>)}</div>
