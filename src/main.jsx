@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { autoplayStep, cameraFor, canMoveUnit, createGame, endTurn, isDiscovered, KINGDOMS, moveCamera, moveUnit, recruit, terrainAt, VIEW_SIZE } from './game.js';
 import './styles.css';
@@ -31,12 +31,40 @@ function TownArt({ capital }) {
   </svg>;
 }
 
+function Chronicle({ log, onClose }) {
+  const dialog = useRef(null);
+  const [copyStatus, setCopyStatus] = useState('');
+  const text = useMemo(() => [...log].reverse().join('\n'), [log]);
+
+  useEffect(() => {
+    dialog.current.showModal();
+  }, []);
+
+  async function copyLog() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus('Chronicle copied.');
+    } catch {
+      setCopyStatus('Could not copy. Select the log below and copy it manually.');
+    }
+  }
+
+  return <dialog ref={dialog} className="chronicle-dialog" aria-labelledby="chronicle-title" onClose={onClose}>
+    <div className="chronicle-header"><div><div className="selection-tag">CAMPAIGN HISTORY</div><h2 id="chronicle-title">The Chronicle</h2><p>Every recorded event, from the beginning of your campaign.</p></div><button className="chronicle-close" onClick={() => dialog.current.close()} aria-label="Close chronicle" autoFocus>×</button></div>
+    <div className="chronicle-toolbar"><span>{log.length} events · oldest first</span><button className="chronicle-copy" onClick={copyLog}>Copy log</button></div>
+    <p className="copy-status" role="status">{copyStatus || 'Select the text below to copy it manually.'}</p>
+    <textarea className="chronicle-log" aria-label="Campaign event log" readOnly value={text} onFocus={event => event.target.select()}/>
+  </dialog>;
+}
+
 function App() {
   const [game, setGame] = useState(createGame);
   const [camera, setCamera] = useState(() => cameraFor(49, 49));
   const [selected, setSelected] = useState({ type: 'unit', id: 'army-1' });
   const [notice, setNotice] = useState('');
-  const [autoplay, setAutoplay] = useState(false);
+  const [playMode, setPlayMode] = useState(null);
+  const [showChronicle, setShowChronicle] = useState(false);
+  const autoplay = playMode !== null;
   const unit = selected?.type === 'unit' ? game.armies.find(a => a.id === selected.id) : null;
   const city = selected?.type === 'city' ? game.cities.find(c => c.id === selected.id) : null;
   const ownedCities = game.cities.filter(c => c.owner === 'england');
@@ -72,20 +100,28 @@ function App() {
   useEffect(() => {
     if (!autoplay) return;
     const timer = window.setTimeout(() => {
-      const result = autoplayStep(game);
+      let state = game;
+      let result;
+      const start = performance.now();
+      let steps = 0;
+      do {
+        result = autoplayStep(state);
+        state = result.state;
+        steps++;
+      } while (playMode === 'fast' && !result.stopped && steps < 30 && performance.now() - start < 75);
+      setGame(state);
       if (result.stopped) {
-        setAutoplay(false);
+        setPlayMode(null);
         setNotice(result.stopped);
         return;
       }
-      setGame(result.state);
-      if (result.position) {
+      if (result.position && playMode === 'normal') {
         setCamera(cameraFor(result.position.x, result.position.y));
         setSelected(result.state.armies.some(army => army.id === result.unitId) ? { type: 'unit', id: result.unitId } : null);
       }
-    }, 500);
+    }, playMode === 'fast' ? 10 : 500);
     return () => window.clearTimeout(timer);
-  }, [autoplay, game]);
+  }, [playMode, game]);
 
   function clickTile(tile) {
     setNotice('');
@@ -164,7 +200,7 @@ function App() {
     <main className="main">
       <header className="topbar"><div className="breadcrumb">CAMPAIGN <span>/</span> <b>THE KNOWN WORLD</b></div><div className="top-right"><div className="resource"><Icon name="gold"/><span><b>{resources.gold.toLocaleString()}</b><small>GOLD</small></span></div><div className="resource"><Icon name="food"/><span><b>{resources.food.toLocaleString()}</b><small>FOOD</small></span></div><div className="resource"><Icon name="people"/><span><b>{resources.population.toLocaleString()}</b><small>POPULATION</small></span></div><div className="turn-chip"><small>CURRENT TURN</small><b>{String(game.turn).padStart(2, '0')}</b></div></div></header>
       <div className="content">
-        <div className="page-heading"><div><div className="eyebrow"><span/> YOUR KINGDOM AWAITS</div><h1>The Known World</h1><p>Explore the frontier, grow your kingdom, and make your mark.</p></div><div className="turn-actions"><button className={`autoplay-button ${autoplay ? 'running' : ''}`} aria-pressed={autoplay} onClick={() => { setAutoplay(!autoplay); setNotice(''); }}><span>{autoplay ? 'Pause autoplay' : 'Autoplay'}<small>{autoplay ? 'Take back control' : 'Watch your kingdom'}</small></span><span className="autoplay-icon" aria-hidden="true">{autoplay ? 'Ⅱ' : '▶'}</span></button><button className="end-turn" disabled={autoplay} onClick={() => { setGame(endTurn(game)); setNotice(''); }}><span>End turn <small>Let the world advance</small></span><span className="end-arrow">→</span></button></div></div>
+        <div className="page-heading"><div><div className="eyebrow"><span/> YOUR KINGDOM AWAITS</div><h1>The Known World</h1><p>Explore the frontier, grow your kingdom, and make your mark.</p></div><div className="turn-actions"><button className={`autoplay-button ${playMode === 'normal' ? 'running' : ''}`} aria-pressed={playMode === 'normal'} onClick={() => { setPlayMode(playMode === 'normal' ? null : 'normal'); setNotice(''); }}><span>{playMode === 'normal' ? 'Pause autoplay' : 'Autoplay'}<small>{playMode === 'normal' ? 'Take back control' : 'Watch your kingdom'}</small></span><span className="autoplay-icon" aria-hidden="true">{playMode === 'normal' ? 'Ⅱ' : '▶'}</span></button><button className={`autoplay-button ${playMode === 'fast' ? 'running' : ''}`} aria-pressed={playMode === 'fast'} onClick={() => { setPlayMode(playMode === 'fast' ? null : 'fast'); setNotice(''); }}><span>{playMode === 'fast' ? 'Pause fast play' : 'Fast Play'}<small>{playMode === 'fast' ? 'Take back control' : 'Advance quickly'}</small></span><span className="autoplay-icon" aria-hidden="true">{playMode === 'fast' ? 'Ⅱ' : '▶▶'}</span></button><button className="end-turn" disabled={autoplay} onClick={() => { setGame(endTurn(game)); setNotice(''); }}><span>End turn <small>Let the world advance</small></span><span className="end-arrow">→</span></button></div></div>
         <div className="workspace">
           <section className="map-panel"><div className="panel-header"><div><div className="panel-title"><span className="gold-dot"/> WORLD MAP <span className="subtle">/</span> <span className="subtle">THE FRONTIER</span></div><div className="panel-subtitle">A world of opportunity lies beyond the fog.</div></div><div className="map-coordinates">VIEW <b>{camera.x + 1}–{camera.x + 8} / {camera.y + 1}–{camera.y + 8}</b></div></div>
             <div className="map-wrap"><div className="map-grid" role="grid" aria-label="World map, eight by eight tiles">{tiles.map(tile => {
@@ -187,12 +223,13 @@ function App() {
               {notice && <div className="notice" role="alert">{notice}</div>}
             </section>
             <section className="minimap-panel"><div className="detail-heading"><span>THE WIDER WORLD</span><span className="mini-label">100 × 100</span></div><svg className="minimap" viewBox="0 0 100 100" role="img" aria-label="Overview of discovered world"><rect width="100" height="100" fill="#25342c"/>{Object.keys(game.discovered).map(k => { const [x, y] = k.split(',').map(Number); const terrain = terrainAt(x, y); return <rect key={k} x={x} y={y} width="1" height="1" fill={terrain === 'water' ? '#78a8c1' : terrain === 'mountain' ? '#93877b' : '#b3bb8c'}/>; })}<rect x={camera.x} y={camera.y} width="8" height="8" fill="none" stroke="#e7c37d" strokeWidth="1.5"/></svg><div className="minimap-caption"><span><i className="legend-dot england"/> Current view</span><span>{(explored / 100).toFixed(1)}% explored</span></div></section>
-            <section className="activity-panel"><div className="detail-heading"><span>CHRONICLE</span><Icon name="scroll" size={16}/></div>{game.log.slice(0, 3).map((entry, i) => <div className="activity" key={`${entry}-${i}`}><i/><span>{entry}</span></div>)}</section>
+            <section className="activity-panel"><div className="detail-heading"><span>CHRONICLE</span><button className="show-chronicle" onClick={() => setShowChronicle(true)}>Show All</button></div>{game.log.slice(0, 3).map((entry, i) => <div className="activity" key={`${entry}-${i}`}><i/><span>{entry}</span></div>)}</section>
           </aside>
         </div>
         <div className="bottom-note"><span>✧</span> A kingdom is built one decision at a time. <span>✧</span><small>ARROW KEYS TO PAN THE MAP</small></div>
       </div>
     </main>
+    {showChronicle && <Chronicle log={game.log} onClose={() => setShowChronicle(false)}/>}
   </div>;
 }
 

@@ -101,9 +101,14 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
     nextId: 2,
     nextGeneralId: 1,
     randomSeed: seed >>> 0,
-    log: ['A new chapter begins. Your kingdom awaits.'],
+    log: [],
   };
   state.armies[0].general = createGeneral(state);
+  addLog(state, 'A new chapter begins. Your kingdom awaits.');
+  for (const city of cities.filter(place => place.capital)) {
+    addLog(state, `${KINGDOMS[city.owner].name} established its capital at ${city.name} (${city.x + 1}, ${city.y + 1}).`);
+  }
+  addLog(state, `${state.armies[0].general.name} leads the Royal Guard in London.`);
   revealPlayer(state);
   return state;
 }
@@ -124,43 +129,45 @@ function copyState(state) {
 }
 
 function addLog(state, message) {
-  state.log.unshift(message);
-  state.log = state.log.slice(0, 8);
+  state.log.unshift(`Turn ${state.turn}: ${message}`);
 }
 
 function resolveArrival(state, army) {
   const enemy = state.armies.find(other => other.id !== army.id && other.owner !== army.owner && other.x === army.x && other.y === army.y);
   if (enemy) {
+    const attackerStrength = army.troops;
+    const defenderStrength = enemy.troops;
     const attackerWins = army.troops > enemy.troops;
     const winner = attackerWins ? army : enemy;
     const loser = attackerWins ? enemy : army;
     winner.troops = Math.max(1, winner.troops - loser.troops);
     state.armies = state.armies.filter(unit => unit.id !== loser.id);
-    const visible = army.owner === 'england' || enemy.owner === 'england' || isDiscovered(state, army.x, army.y);
-    if (visible) {
-      addLog(state, `${winner.name} defeated ${loser.name} near ${army.x + 1}, ${army.y + 1}.`);
-    }
+    const city = state.cities.find(place => place.x === army.x && place.y === army.y);
+    const describe = unit => `${unit.name} [${KINGDOMS[unit.owner].name}]${unit.general ? ` (General ${unit.general.name})` : ''}`;
+    addLog(state, `${describe(army)} attacked ${describe(enemy)} at ${city ? `${city.name} ` : ''}(${army.x + 1}, ${army.y + 1}): ${attackerStrength} vs ${defenderStrength}. ${describe(winner)} defeated ${describe(loser)} with ${winner.troops} remaining; ${loser.general ? `General ${loser.general.name} was lost.` : 'the defeated force was destroyed.'}`);
     if (winner.general) {
       const skill = generalSkills[randomInt(state, generalSkills.length)];
       winner.general.level++;
       winner.general.skills[skill]++;
-      if (visible) addLog(state, `${winner.general.name} reached level ${winner.general.level} (+1 ${skill}).`);
+      addLog(state, `${winner.general.name} reached level ${winner.general.level} (+1 ${skill}).`);
     }
     if (!attackerWins) return;
   }
   const city = state.cities.find(place => place.x === army.x && place.y === army.y);
   if (city?.owner && army.owner === 'barbarian') {
     const resources = state.resources[city.owner];
+    const lost = { gold: Math.min(resources.gold, 30), food: Math.min(resources.food, 20), population: Math.min(resources.population, 50) };
     resources.gold = Math.max(0, resources.gold - 30);
     resources.food = Math.max(0, resources.food - 20);
     resources.population = Math.max(0, resources.population - 50);
-    if (city.owner === 'england' || isDiscovered(state, city.x, city.y)) addLog(state, `Barbarians raided ${city.name}, stealing gold and food and costing population.`);
+    addLog(state, `Barbarians raided ${city.name} (${city.x + 1}, ${city.y + 1}), owned by ${KINGDOMS[city.owner].name}, costing ${lost.gold} gold, ${lost.food} food and ${lost.population} population.`);
     state.armies = state.armies.filter(unit => unit.id !== army.id);
     return;
   }
   if (city && city.owner !== army.owner && army.kind === 'army') {
+    const previousOwner = city.owner;
     city.owner = army.owner;
-    if (army.owner === 'england' || isDiscovered(state, city.x, city.y)) addLog(state, `${KINGDOMS[army.owner].name} claimed ${city.name}.`);
+    addLog(state, `${KINGDOMS[army.owner].name} claimed ${city.name} (${city.x + 1}, ${city.y + 1})${previousOwner ? ` from ${KINGDOMS[previousOwner].name}` : ''}.`);
   }
 }
 
@@ -193,7 +200,7 @@ function moveForOwner(state, id, x, y, owner) {
     ally.moves = Math.min(ally.moves, moving.moves);
     if (moving.general) ally.general = moving.general;
     next.armies = next.armies.filter(other => other.id !== id);
-    if (owner === 'england' || isDiscovered(next, x, y)) addLog(next, `${moving.name} merged into ${ally.name} (${ally.troops} soldiers).`);
+    addLog(next, `${KINGDOMS[owner].name}'s ${moving.name} merged into ${ally.name} (${ally.troops} soldiers).`);
     revealPlayer(next);
     return next;
   }
@@ -234,7 +241,7 @@ function recruitForOwner(state, cityId, owner, kind = 'army', allowAdjacent = fa
   const army = { id: `army-${next.nextId++}`, name: kind === 'scout' ? 'Rangers' : owner === 'england' ? 'New Levy' : `${KINGDOMS[owner].name} levy`, owner, kind, x: position.x, y: position.y, troops: kind === 'scout' ? 20 : 60, units: 1, moves: 0 };
   if (kind === 'army' && randomInt(next, 2) === 0) army.general = createGeneral(next);
   next.armies.push(army);
-  if (owner === 'england' || isDiscovered(next, city.x, city.y)) addLog(next, `${kind === 'scout' ? 'Scouts recruited' : 'Army raised'} in ${city.name}. Ready next turn.`);
+  addLog(next, `${KINGDOMS[owner].name}: ${kind === 'scout' ? 'Scouts recruited' : 'Army raised'} in ${city.name}${army.general ? ` under General ${army.general.name}` : ''}. Ready next turn.`);
   revealPlayer(next);
   return next;
 }
@@ -286,7 +293,9 @@ function spawnBarbarians(state) {
     }
     if (!candidates.length) continue;
     const position = candidates[randomInt(state, candidates.length)];
-    state.armies.push({ id: `barbarian-${state.nextId++}`, name: 'Barbarian raiders', owner: 'barbarian', kind: 'barbarian', ...position, troops: 20 + randomInt(state, 21), units: 1, moves: 0 });
+    const band = { id: `barbarian-${state.nextId++}`, name: 'Barbarian raiders', owner: 'barbarian', kind: 'barbarian', ...position, troops: 20 + randomInt(state, 21), units: 1, moves: 0 };
+    state.armies.push(band);
+    addLog(state, `A band of ${band.troops} barbarian raiders appeared near ${city.name} (${position.x + 1}, ${position.y + 1}).`);
     if (isDiscovered(state, position.x, position.y)) addLog(state, `Barbarian raiders sighted near ${position.x + 1}, ${position.y + 1}.`);
   }
 }
@@ -319,6 +328,7 @@ function barbarianTurn(state) {
 export function endTurn(state) {
   let next = copyState(state);
   next.turn++;
+  addLog(next, `Turn ${next.turn} begins. Your cities have produced resources.`);
   for (const owner of KINGDOM_OWNERS) {
     const cityCount = next.cities.filter(city => city.owner === owner).length;
     next.resources[owner].gold += cityCount * 25;
@@ -330,7 +340,6 @@ export function endTurn(state) {
   spawnBarbarians(next);
   for (const unit of next.armies) if (unit.owner === 'england') unit.moves = MOVE_RANGE;
   revealPlayer(next);
-  addLog(next, `Turn ${next.turn} begins. Your cities have produced resources.`);
   return next;
 }
 

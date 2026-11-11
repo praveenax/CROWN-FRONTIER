@@ -349,6 +349,30 @@ test('raiders loot a city after defeating its garrison', () => {
   assert.ok(next.log.some(entry => entry.includes('raided London')));
 });
 
+test('chronicle retains turn-stamped history and starting capitals', () => {
+  let game = createGame(12);
+  const firstEntries = [...game.log];
+  assert.ok(firstEntries.some(entry => entry.includes('Turn 1: England established its capital at London')));
+  assert.ok(firstEntries.some(entry => entry.includes('France established its capital at Paris')));
+  for (let turn = 0; turn < 10; turn++) game = endTurn(game);
+  assert.ok(game.log.length > 8);
+  assert.deepEqual(game.log.slice(-firstEntries.length), firstEntries);
+  assert.ok(game.log.every(entry => /^Turn \d+: /.test(entry)));
+});
+
+test('chronicle records off-screen battles and raid losses with their turn', () => {
+  const game = createGame(12);
+  const defender = game.armies.find(unit => unit.owner === 'france');
+  defender.troops = 10;
+  game.armies.push({ id: 'raiders', name: 'Barbarian raiders', owner: 'barbarian', kind: 'barbarian', x: 21, y: 22, troops: 30, units: 1, moves: 0 });
+  assert.equal(isDiscovered(game, 20, 22), false);
+  const next = endTurn(game);
+  const battle = next.log.find(entry => entry.includes('attacked France host [France]'));
+  assert.match(battle, /Turn 2: .*Paris \(21, 23\): 30 vs 10.*20 remaining/);
+  assert.ok(next.log.some(entry => /Turn 2: Barbarians raided Paris.*owned by France.*30 gold, 20 food and 50 population/.test(entry)));
+  assert.ok(next.log.indexOf(battle) < next.log.findIndex(entry => entry.includes('Turn 2 begins')));
+});
+
 test('autoplay retains garrisons and can recruit mobile armies next to them', () => {
   const game = createGame(12);
   const result = autoplayStep(game);
