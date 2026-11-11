@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { autoplayStep, buildBuilding, cameraFor, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, MAX_MERGED_UNITS, MAX_TROOPS, moveCamera, moveUnit, recruit, terrainAt, TROOP_TYPES, VIEW_SIZE } from './game.js';
+import { autoplayStep, buildBuilding, cameraFor, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, MAX_MERGED_UNITS, MAX_TROOPS, moveCamera, moveUnit, recruit, terrainAt, TROOP_TYPES, resolveWorldEvent, worldEventChoices, VIEW_SIZE } from './game.js';
+import { WORLD_EVENTS } from './worldEvents.js';
 
 test('creates the world with four kingdoms, fog, and a bounded viewport', () => {
   const game = createGame();
@@ -807,4 +808,66 @@ test('autoplay logs its chosen objective and condensed chronicle retains major e
   ];
   assert.deepEqual(chronicleEntries(events), ['Turn 1: a capital fell', 'Turn 1: 2 recovery events.', 'Turn 1: recruited']);
   assert.deepEqual(chronicleEntries(events, false), events.map(event => event.text).reverse());
+});
+
+
+test('world events use a seeded deck of 24 distinct events with three choices each', () => {
+  assert.equal(WORLD_EVENTS.length, 24);
+  assert.equal(new Set(WORLD_EVENTS.map(event => event.id)).size, 24);
+  assert.ok(WORLD_EVENTS.every(event => event.choices.length === 3));
+
+  const draw = () => {
+    let game = createGame(12);
+    const ids = [];
+    while (ids.length < WORLD_EVENTS.length) {
+      game = endTurn({ ...game, nextWorldEventTurn: game.turn + 1 });
+      ids.push(game.pendingWorldEvent);
+      assert.ok(game.nextWorldEventTurn - game.turn >= 20);
+      assert.ok(game.nextWorldEventTurn - game.turn <= 30);
+      game = resolveWorldEvent(game, 0);
+    }
+    return ids;
+  };
+  const events = draw();
+  assert.equal(new Set(events).size, 24);
+  assert.deepEqual(draw(), events);
+});
+
+test('a manual event pauses turns until a valid response and logs all kingdoms', () => {
+  let game = createGame(12);
+  game = endTurn({ ...game, nextWorldEventTurn: 2 });
+  assert.equal(endTurn(game), game);
+  assert.equal(resolveWorldEvent(game, 3), game);
+  const event = worldEventChoices(game);
+  assert.equal(event.choices.length, 3);
+  const resolved = resolveWorldEvent(game, 1);
+  assert.equal(resolved.pendingWorldEvent, null);
+  assert.equal(resolved.turn, game.turn);
+  assert.equal(resolveWorldEvent(resolved, 1), resolved);
+  const decisions = resolved.logEvents.filter(({ text }) =>
+    text.includes(event.title) && text.includes(' chose '));
+  assert.equal(decisions.length, 4);
+  assert.ok(decisions.some(({ text }) => text.includes('Alderwyn chose “' + event.choices[1].label)));
+});
+
+test('autoplay resolves world events without waiting for player input', () => {
+  const game = createGame(12);
+  game.nextWorldEventTurn = 2;
+  game.armies[0].moves = 0;
+  game.armies.push(...Array.from({ length: 4 }, (_, index) => ({
+    ...game.armies[0], id: 'reserve-' + index, general: null,
+  })));
+  const result = autoplayStep(game).state;
+  assert.equal(result.turn, 2);
+  assert.equal(result.pendingWorldEvent, null);
+  assert.equal(result.logEvents.filter(({ text }) => text.includes('World event') && text.includes(' chose ')).length, 4);
+});
+
+test('refusing tribute spawns a horde aimed at the affected town', () => {
+  const game = { ...createGame(12), pendingWorldEvent: 'barbarian-horde' };
+  const resolved = resolveWorldEvent(game, 2);
+  assert.ok(resolved.armies.some(army => army.raidTargetId === 'london' && army.troops === 85));
+  assert.ok(resolved.log.some(line => line.includes('85 raiders appeared near Crownstead')));
+  assert.equal(resolved.resources.england.gold, game.resources.england.gold + 45);
+  assert.equal(game.armies.length, 4);
 });
