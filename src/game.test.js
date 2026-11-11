@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { autoplayStep, buildBuilding, cameraFor, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, moveCamera, moveUnit, recruit, terrainAt, VIEW_SIZE } from './game.js';
+import { autoplayStep, buildBuilding, cameraFor, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, moveCamera, moveUnit, recruit, terrainAt, TROOP_TYPES, VIEW_SIZE } from './game.js';
 
 test('creates the world with four kingdoms, fog, and a bounded viewport', () => {
   const game = createGame();
@@ -40,6 +40,16 @@ test('each kingdom receives a distinct, seeded ruler that persists through turns
   assert.deepEqual(endTurn(game).rulers, game.rulers);
 });
 
+test('city gold generation and Trading Post income are reduced', () => {
+  assert.deepEqual(
+    [0, 500, 1000, 2000].map(population => cityDevelopment({ population }).gold),
+    [12, 18, 25, 35],
+  );
+  const tradingPost = cityDevelopment({ population: 1000, constructedBuildings: ['trading-post'] });
+  assert.equal(tradingPost.gold, 35);
+  assert.equal(tradingPost.food, 45);
+});
+
 test('movement is adjacent, limited per turn, reveals land and claims towns', () => {
   let game = createGame();
   assert.equal(moveUnit(game, 'army-1', 51, 49), game);
@@ -66,8 +76,76 @@ test('recruitment costs resources, needs an empty city, and units activate next 
   assert.equal(recruit(game, 'london', 'army'), game);
   game = endTurn(game);
   assert.equal(game.armies.find(unit => unit.id === 'army-2').moves, 3);
-  assert.deepEqual(game.resources.england, { gold: 200, food: 180 });
+  assert.deepEqual(game.resources.england, { gold: 175, food: 180 });
   assert.equal(kingdomPopulation(game, 'england'), 1300);
+});
+
+test('cities recruit each single-type troop squad at its listed cost', () => {
+  for (const [type, troop] of Object.entries(TROOP_TYPES)) {
+    let game = createGame(12);
+    game = moveUnit(game, 'army-1', 50, 49);
+    game.resources.england = { gold: 500, food: 500 };
+    const recruited = recruit(game, 'london', type);
+    const squad = recruited.armies.find(unit => unit.id === 'army-2');
+    assert.equal(squad.troopType, type);
+    assert.equal(squad.troops, 60);
+    assert.deepEqual(recruited.resources.england, {
+      gold: 500 - troop.cost.gold,
+      food: 500 - troop.cost.food,
+    });
+  }
+
+  let game = createGame(12);
+  game = moveUnit(game, 'army-1', 50, 49);
+  assert.equal(recruit(game, 'london').armies.find(unit => unit.id === 'army-2').troopType, 'spearman');
+  assert.equal(recruit(game, 'london', 'army').armies.find(unit => unit.id === 'army-2').troopType, 'spearman');
+});
+
+test('armies of different troop types cannot merge', () => {
+  const game = createGame();
+  game.armies[0].troopType = 'swordsman';
+  game.armies.push({
+    id: 'spearmen',
+    name: 'Spearmen',
+    owner: 'england',
+    kind: 'army',
+    troopType: 'spearman',
+    x: 50,
+    y: 49,
+    troops: 60,
+    maxTroops: 60,
+    units: 1,
+    moves: 3,
+  });
+  assert.equal(moveUnit(game, 'army-1', 50, 49), game);
+});
+
+test('archers fire first and knights reduce incoming arrow casualties', () => {
+  let game = createGame();
+  const enemy = game.armies.find(unit => unit.owner === 'france');
+  Object.assign(enemy, { x: 50, y: 49, troopType: 'archer', troops: 60 });
+  game.armies[0].troops = 60;
+  game = moveUnit(game, 'army-1', 50, 49);
+  assert.equal(game.armies.some(unit => unit.id === 'army-1'), false);
+  assert.equal(game.armies.find(unit => unit.owner === 'france').troops, 4);
+  assert.ok(game.log.some(entry => entry.includes('Archer volleys caused 15 attacker and 0 defender casualties')));
+
+  game = createGame();
+  const knights = game.armies.find(unit => unit.owner === 'france');
+  Object.assign(knights, { x: 50, y: 49, troopType: 'knight', troops: 60 });
+  Object.assign(game.armies[0], { troopType: 'archer', troops: 60 });
+  game = moveUnit(game, 'army-1', 50, 49);
+  assert.equal(game.armies.find(unit => unit.owner === 'france').troops, 10);
+  assert.ok(game.log.some(entry => entry.includes('0 attacker and 7 defender casualties')));
+});
+
+test('archers weaken city defenses with a siege volley', () => {
+  const game = createGame(12);
+  Object.assign(game.armies[0], { x: 52, y: 48, troopType: 'archer', troops: 60 });
+  const next = moveUnit(game, 'army-1', 52, 47);
+  assert.equal(next.cities.find(city => city.id === 'ashford').owner, 'england');
+  assert.equal(next.armies.find(unit => unit.id === 'army-1').troops, 53);
+  assert.ok(next.log.some(entry => entry.includes('reducing its defenses by 15')));
 });
 
 test('combat favors the defender in ties and scouts do not claim settlements', () => {
@@ -76,7 +154,7 @@ test('combat favors the defender in ties and scouts do not claim settlements', (
   Object.assign(enemy, { x: 50, y: 49, troops: 120 });
   game = moveUnit(game, 'army-1', 50, 49);
   assert.equal(game.armies.some(unit => unit.id === 'army-1'), false);
-  assert.equal(game.armies.find(unit => unit.owner === 'france').troops, 1);
+  assert.equal(game.armies.find(unit => unit.owner === 'france').troops, 40);
   game = createGame();
   Object.assign(game.armies[0], { kind: 'scout', x: 52, y: 48 });
   game = moveUnit(game, 'army-1', 52, 47);
@@ -93,7 +171,7 @@ test('opponents collect and spend resources while keeping a garrison', () => {
   assert.equal(levy.troops, 60);
   assert.equal(levy.moves, 0);
   assert.equal(Math.abs(levy.x - 20) + Math.abs(levy.y - 22), 1);
-  assert.deepEqual(game.resources.france, { gold: 170, food: 155 });
+  assert.deepEqual(game.resources.france, { gold: 145, food: 155 });
   assert.equal(kingdomPopulation(game, 'france'), 1260);
   assert.equal(before.turn, 1);
 });
@@ -132,7 +210,7 @@ test('autoplay attacks nearby discovered enemies and avoids friendly units', () 
   Object.assign(enemy, { x: 50, y: 49, troops: 50 });
   game = autoplayStep(game).state;
   assert.equal(game.armies.some(unit => unit.owner === 'france'), false);
-  assert.equal(game.armies.find(unit => unit.id === 'army-1').troops, 70);
+  assert.equal(game.armies.find(unit => unit.id === 'army-1').troops, 45);
 
   game = createGame();
   game.cities.find(city => city.id === 'london').owner = null;
@@ -240,7 +318,7 @@ test('garrisoned armies recover a tenth of full strength for free, up to their c
   game = endTurn(game);
   assert.equal(game.armies[0].troops, 26);
   assert.equal(before.armies[0].troops, 20);
-  assert.deepEqual(game.resources.england, { gold: before.resources.england.gold + 50, food: before.resources.england.food + 45 });
+  assert.deepEqual(game.resources.england, { gold: before.resources.england.gold + 25, food: before.resources.england.food + 45 });
   assert.equal(game.cities[0].population, before.cities[0].population + 120);
   assert.ok(game.log.some(entry => entry.includes(`recovered 6 soldiers in ${KINGDOMS.england.capital}`)));
   game = endTurn(game);
@@ -269,7 +347,7 @@ test('a garrison recovers before barbarians attack', () => {
   guard.troops = 20;
   game.armies = [guard, { id: 'raiders', name: 'Barbarian raiders', owner: 'barbarian', kind: 'barbarian', x: 50, y: 49, troops: 25, units: 1, moves: 0 }];
   const next = endTurn(game);
-  assert.equal(next.armies.find(unit => unit.id === guard.id).troops, 7);
+  assert.equal(next.armies.find(unit => unit.id === guard.id).troops, 16);
   assert.equal(next.armies.some(unit => unit.id === 'raiders'), false);
   assert.equal(next.cities.find(city => city.id === 'london').defense, 40);
 });
@@ -447,10 +525,10 @@ test('a garrison battles raiders and its general earns experience on victory', (
   game.armies.push({ id: 'raiders', name: 'Barbarian raiders', owner: 'barbarian', kind: 'barbarian', x: 50, y: 49, troops: 30, units: 1, moves: 0 });
   const next = endTurn(game);
   const guard = next.armies.find(unit => unit.id === 'army-1');
-  assert.equal(guard.troops, 90);
+  assert.equal(guard.troops, 100);
   assert.equal(guard.general.level, 2);
   assert.equal(next.armies.some(unit => unit.id === 'raiders'), false);
-  assert.deepEqual(next.resources.england, { gold: 230, food: 195 });
+  assert.deepEqual(next.resources.england, { gold: 205, food: 195 });
   assert.equal(kingdomPopulation(next, 'england'), 1320);
 });
 
@@ -461,7 +539,7 @@ test('raiders loot a city after defeating its garrison', () => {
   const next = endTurn(game);
   assert.equal(next.armies.some(unit => unit.id === 'army-1' || unit.id === 'raiders'), false);
   assert.equal(next.cities.find(city => city.id === 'london').owner, 'england');
-  assert.deepEqual(next.resources.england, { gold: 200, food: 175 });
+  assert.deepEqual(next.resources.england, { gold: 175, food: 175 });
   assert.equal(kingdomPopulation(next, 'england'), 1270);
   assert.ok(next.log.some(entry => entry.includes(`raided ${KINGDOMS.england.capital}`)));
 });
@@ -485,7 +563,7 @@ test('chronicle records off-screen battles and raid losses with their turn', () 
   assert.equal(isDiscovered(game, 20, 22), false);
   const next = endTurn(game);
   const battle = next.log.find(entry => entry.includes(`attacked ${KINGDOMS.france.name} host [${KINGDOMS.france.name}]`));
-  assert.ok(battle.includes(`Turn 2: `) && battle.includes(`${KINGDOMS.france.capital} (21, 23): 60 vs 10`) && battle.includes('50 remaining'));
+  assert.ok(battle.includes(`Turn 2: `) && battle.includes(`${KINGDOMS.france.capital} (21, 23): 60 vs 10`) && battle.includes('45 remaining'));
   assert.ok(next.log.some(entry => entry.includes(`owned by ${KINGDOMS.france.name}`) && entry.includes(`Turn 2: Barbarians raided ${KINGDOMS.france.capital}`) && entry.includes('30 gold, 20 food and 50 population')));
   assert.ok(next.log.indexOf(battle) < next.log.findIndex(entry => entry.includes('Turn 2 begins')));
 });
@@ -533,7 +611,7 @@ test('city growth unlocks buildings and recruitment uses local population', () =
   assert.equal(grown.population, 500);
   assert.equal(cityDevelopment(grown).level, 2);
   assert.ok(cityDevelopment(grown).buildings.includes('Guildhall'));
-  assert.deepEqual(game.resources.england, { gold: 205, food: 170 });
+  assert.deepEqual(game.resources.england, { gold: 192, food: 170 });
   assert.equal(grown.defense, 30);
   assert.equal(before.cities.find(city => city.id === 'london').population, 420);
   assert.equal(cityDevelopment({ population: 999 }).level, 2);
@@ -584,8 +662,8 @@ test('standings rank kingdoms from economy, forces, defenses and map territory',
   game.resources.france = { gold: 0, food: 0 };
   game.armies = [{ owner: 'england', troops: 50 }];
   const standings = kingdomStandings(game);
-  assert.deepEqual(standings[0], { owner: 'england', economic: 1180, military: 80, land: 50000, total: 51260 });
-  assert.deepEqual(standings.find(row => row.owner === 'france'), { owner: 'france', economic: 750, military: 20, land: 50000, total: 50770 });
+  assert.deepEqual(standings[0], { owner: 'england', economic: 1010, military: 80, land: 50000, total: 51090 });
+  assert.deepEqual(standings.find(row => row.owner === 'france'), { owner: 'france', economic: 620, military: 20, land: 50000, total: 50640 });
   game.cities[0].owner = 'france';
   const after = kingdomStandings(game);
   assert.equal(after[0].owner, 'france');
@@ -611,7 +689,7 @@ test('cities can construct affordable improvements once and apply their effects'
   assert.equal(cityDevelopment(developed).defense, 50);
   assert.equal(developed.defense, 50);
   game = buildBuilding(game, city.id, 'trading-post');
-  assert.equal(cityDevelopment(game.cities.find(place => place.id === city.id)).gold, 70);
+  assert.equal(cityDevelopment(game.cities.find(place => place.id === city.id)).gold, 35);
   game = buildBuilding(game, city.id, 'academy');
   assert.equal(cityDevelopment(game.cities.find(place => place.id === city.id)).growth, 250);
   assert.deepEqual(original.cities.find(place => place.id === city.id).constructedBuildings, undefined);
@@ -659,9 +737,9 @@ test('one operation links the actual order, battle, breach, capture and general 
   const next = moveUnit(game, 'army-1', 52, 47);
   const related = next.log.filter(entry => entry.includes('[operation-1]'));
   assert.ok(related.some(entry => entry.includes('Manual move to (53, 48)') && entry.includes(`${general.name} [${general.id}]`) && entry.includes('120 troops')));
-  assert.ok(related.some(entry => entry.includes('120 vs 60') && entry.includes('Attacker survivors: 60')));
-  assert.ok(related.some(entry => entry.includes('60 vs 20') && entry.includes('40 troops remaining')));
-  assert.ok(related.some(entry => entry.includes('claimed Ashford') && entry.includes('Survivors: 40') && entry.includes('Future production belongs to the new owner')));
+  assert.ok(related.some(entry => entry.includes('120 vs 60') && entry.includes('Attacker survivors: 30')));
+  assert.ok(related.some(entry => entry.includes('30 vs 20') && entry.includes('10 troops remaining')));
+  assert.ok(related.some(entry => entry.includes('claimed Ashford') && entry.includes('Survivors: 10') && entry.includes('Future production belongs to the new owner')));
   assert.ok(related.some(entry => entry.includes(`${KINGDOMS.england.name}'s first conquest`)));
   assert.ok(related.some(entry => entry.includes('enemy-general') && entry.includes('was lost')));
   assert.ok(next.generalHistory[general.id].events.some(event => event.includes('won battle')));

@@ -10,7 +10,56 @@ export const KINGDOMS = {
   norway: { name: "Eirengard", color: "#a995c0", capital: "Frostharbor" },
   barbarian: { name: "Barbarians", color: "#9e4f43" },
 };
+export const TROOP_TYPES = {
+  spearman: {
+    name: "Spearmen",
+    description: "Defensive infantry with strong protection in battle.",
+    cost: { gold: 60, food: 40, population: 60 },
+    attack: 100,
+    defense: 150,
+  },
+  swordsman: {
+    name: "Swordsmen",
+    description: "Hard-hitting infantry with a strong attack.",
+    cost: { gold: 75, food: 40, population: 60 },
+    attack: 150,
+    defense: 100,
+  },
+  archer: {
+    name: "Archers",
+    description: "Fire a pre-battle volley and weaken city defenses during sieges.",
+    cost: { gold: 70, food: 45, population: 60 },
+    attack: 80,
+    defense: 80,
+  },
+  knight: {
+    name: "Knights",
+    description: "Powerful attackers with moderate defense and resistance to arrows.",
+    cost: { gold: 110, food: 60, population: 60 },
+    attack: 180,
+    defense: 110,
+  },
+};
 const KINGDOM_OWNERS = ["england", "france", "castile", "norway"];
+
+function troopTypeOf(army) {
+  return army.troopType && TROOP_TYPES[army.troopType] ? army.troopType : "spearman";
+}
+
+function combatStat(army, stat) {
+  return army.kind === "army" ? TROOP_TYPES[troopTypeOf(army)][stat] : 100;
+}
+
+function archerVolley(archers, target) {
+  if (troopTypeOf(archers) !== "archer") return 0;
+  const hits = Math.floor(archers.troops / 4);
+  return Math.min(
+    target.troops,
+    target.kind === "army" && troopTypeOf(target) === "knight"
+      ? Math.floor(hits / 2)
+      : hits,
+  );
+}
 
 const cityNames = [
   "Ashford",
@@ -173,7 +222,7 @@ const cityLevels = [
   {
     population: 0,
     buildings: ["Farm", "Market", "Palisade"],
-    gold: 25,
+    gold: 12,
     food: 20,
     growth: 80,
     defense: 20,
@@ -181,7 +230,7 @@ const cityLevels = [
   {
     population: 500,
     buildings: ["Farm", "Market", "Palisade", "Guildhall"],
-    gold: 35,
+    gold: 18,
     food: 30,
     growth: 100,
     defense: 30,
@@ -189,7 +238,7 @@ const cityLevels = [
   {
     population: 1000,
     buildings: ["Farm", "Market", "Palisade", "Guildhall", "Bank"],
-    gold: 50,
+    gold: 25,
     food: 45,
     growth: 120,
     defense: 40,
@@ -204,7 +253,7 @@ const cityLevels = [
       "Bank",
       "Stone walls",
     ],
-    gold: 70,
+    gold: 35,
     food: 60,
     growth: 150,
     defense: 50,
@@ -232,8 +281,8 @@ export const BUILDINGS = [
     name: "Trading Post",
     level: 2,
     cost: { gold: 50, food: 25 },
-    bonus: { gold: 20 },
-    effect: "+20 gold per turn",
+    bonus: { gold: 10 },
+    effect: "+10 gold per turn",
   },
   {
     id: "academy",
@@ -472,6 +521,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
       name: "Royal Guard",
       owner: "england",
       kind: "army",
+      troopType: "spearman",
       x: 49,
       y: 49,
       troops: 120,
@@ -486,6 +536,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
         name: `${KINGDOMS[owner].name} host`,
         owner,
         kind: "army",
+        troopType: "spearman",
         x: city.x,
         y: city.y,
         troops: 100,
@@ -707,18 +758,49 @@ function resolveArrival(state, army, objective) {
     category,
   );
   if (enemy) {
+    const attackerVolley = archerVolley(army, enemy);
+    const defenderVolley = archerVolley(enemy, army);
+    army.troops -= defenderVolley;
+    enemy.troops -= attackerVolley;
     const attackerStrength = army.troops;
     const defenderStrength = enemy.troops;
-    const attackerWins = army.troops > enemy.troops;
-    const winner = attackerWins ? army : enemy;
-    const loser = attackerWins ? enemy : army;
-    winner.troops = Math.max(1, winner.troops - loser.troops);
-    state.armies = state.armies.filter((unit) => unit.id !== loser.id);
+    const attackerPower = attackerStrength * combatStat(army, "attack");
+    const defenderPower = defenderStrength * combatStat(enemy, "defense");
     const describe = (unit) =>
       `${unit.name} [${KINGDOMS[unit.owner].name}]${unit.general ? ` (General ${unit.general.name})` : ""}`;
+    if (!attackerStrength && !defenderStrength) {
+      state.armies = state.armies.filter(
+        (unit) => unit.id !== army.id && unit.id !== enemy.id,
+      );
+      addLog(
+        state,
+        `${describe(army)} and ${describe(enemy)} were destroyed by archer volleys at ${location}. [${operationId}]`,
+        category,
+      );
+      rememberGeneral(state, army.general, `lost at ${location} in ${operationId}`);
+      rememberGeneral(state, enemy.general, `lost at ${location} in ${operationId}`);
+      return;
+    }
+    const attackerWins =
+      attackerStrength > 0 &&
+      (defenderStrength === 0 || attackerPower > defenderPower);
+    const winner = attackerWins ? army : enemy;
+    const loser = attackerWins ? enemy : army;
+    if (loser.troops > 0) {
+      const winnerStat = combatStat(winner, attackerWins ? "attack" : "defense");
+      winner.troops = Math.max(
+        1,
+        Math.min(winner.troops, Math.ceil(Math.abs(attackerPower - defenderPower) / winnerStat)),
+      );
+    }
+    state.armies = state.armies.filter((unit) => unit.id !== loser.id);
+    const volleyReport =
+      attackerVolley || defenderVolley
+        ? ` Archer volleys caused ${defenderVolley} attacker and ${attackerVolley} defender casualties.`
+        : "";
     addLog(
       state,
-      `${describe(army)} attacked ${describe(enemy)} at ${city ? `${city.name} ` : ""}(${army.x + 1}, ${army.y + 1}): ${attackerStrength} vs ${defenderStrength}. ${describe(winner)} defeated ${describe(loser)} with ${winner.troops} remaining; ${loser.general ? `General ${loser.general.name} was lost.` : "the defeated force was destroyed."} [${operationId}] Attacker survivors: ${attackerWins ? army.troops : 0}; defender survivors: ${attackerWins ? 0 : enemy.troops}.${city ? ` Settlement: ${cityLabel(city)}.` : ""}`,
+      `${describe(army)} attacked ${describe(enemy)} at ${city ? `${city.name} ` : ""}(${army.x + 1}, ${army.y + 1}): ${attackerStrength} vs ${defenderStrength} troops (${attackerPower} attack vs ${defenderPower} defense).${volleyReport} ${describe(winner)} defeated ${describe(loser)} with ${winner.troops} remaining; ${loser.general ? `General ${loser.general.name} was lost.` : "the defeated force was destroyed."} [${operationId}] Attacker survivors: ${attackerWins ? army.troops : 0}; defender survivors: ${attackerWins ? 0 : enemy.troops}.${city ? ` Settlement: ${cityLabel(city)}.` : ""}`,
       category,
     );
     rememberGeneral(
@@ -742,10 +824,28 @@ function resolveArrival(state, army, objective) {
   if (
     city &&
     city.owner !== army.owner &&
+    army.kind === "army" &&
+    city.defense > 0 &&
+    troopTypeOf(army) === "archer"
+  ) {
+    const arrows = Math.min(city.defense, Math.floor(army.troops / 4));
+    city.defense -= arrows;
+    if (arrows > 0)
+      addLog(
+        state,
+        `${army.name} fired a siege volley at ${city.name}, reducing its defenses by ${arrows}.`,
+        category,
+      );
+  }
+  if (
+    city &&
+    city.owner !== army.owner &&
     (city.owner || army.kind === "army") &&
     city.defense > 0
   ) {
-    const strength = army.troops;
+    const strength = Math.floor(
+      (army.troops * combatStat(army, "attack")) / 100,
+    );
     const defense = city.defense;
     if (strength <= defense) {
       city.defense = Math.max(1, defense - strength);
@@ -767,7 +867,9 @@ function resolveArrival(state, army, objective) {
         );
       return;
     }
-    army.troops -= defense;
+    army.troops -= Math.ceil(
+      (defense * 100) / combatStat(army, "attack"),
+    );
     city.defense = 0;
     addLog(
       state,
@@ -839,6 +941,7 @@ export function canMerge(unit, other) {
     unit.owner === other.owner &&
     unit.kind === "army" &&
     other.kind === "army" &&
+    troopTypeOf(unit) === troopTypeOf(other) &&
     !(unit.general && other.general) &&
     unit.troops + other.troops <= MAX_TROOPS &&
     unit.units + other.units <= MAX_MERGED_UNITS
@@ -929,7 +1032,7 @@ export function moveUnit(state, id, x, y, objective) {
   return next;
 }
 
-export function recruit(state, cityId, kind = "army") {
+export function recruit(state, cityId, kind = "spearman") {
   if (state.gameOver) return state;
   return recruitForOwner(state, cityId, "england", kind);
 }
@@ -938,21 +1041,23 @@ function recruitForOwner(
   state,
   cityId,
   owner,
-  kind = "army",
+  kind = "spearman",
   allowAdjacent = false,
 ) {
   if (state.gameOver) return state;
+  const troopType = kind === "army" ? "spearman" : kind;
+  const isScout = troopType === "scout";
+  const troop = TROOP_TYPES[troopType];
   const city = state.cities.find(
     (place) => place.id === cityId && place.owner === owner,
   );
-  const cost =
-    kind === "scout"
-      ? { gold: 30, food: 15, population: 20 }
-      : { gold: 60, food: 40, population: 60 };
+  const cost = isScout
+    ? { gold: 30, food: 15, population: 20 }
+    : troop?.cost;
   const resources = state.resources[owner];
   if (
     !city ||
-    !["army", "scout"].includes(kind) ||
+    (!isScout && !troop) ||
     resources.gold < cost.gold ||
     resources.food < cost.food ||
     city.population < cost.population
@@ -1000,28 +1105,29 @@ function recruitForOwner(
   const army = {
     id: `army-${next.nextId++}`,
     name:
-      kind === "scout"
+      isScout
         ? "Rangers"
         : owner === "england"
-          ? "New Levy"
-          : `${KINGDOMS[owner].name} levy`,
+          ? `${troop.name} Company`
+          : `${KINGDOMS[owner].name} ${troop.name.toLowerCase()}`,
     owner,
-    kind,
+    kind: isScout ? "scout" : "army",
+    ...(!isScout ? { troopType } : {}),
     x: position.x,
     y: position.y,
-    troops: kind === "scout" ? 20 : 60,
-    ...(kind === "army" ? { maxTroops: 60 } : {}),
+    troops: isScout ? 20 : 60,
+    ...(!isScout ? { maxTroops: 60 } : {}),
     units: 1,
     moves: 0,
   };
-  if (kind === "army" && randomInt(next, 2) === 0) {
+  if (!isScout && randomInt(next, 2) === 0) {
     army.general = createGeneral(next);
     rememberGeneral(next, army.general);
   }
   next.armies.push(army);
   addLog(
     next,
-    `${KINGDOMS[owner].name}: ${kind === "scout" ? "Scouts recruited" : "Army raised"} in ${city.name}${army.general ? ` under General ${army.general.name} [${army.general.id}]` : ""}. Ready next turn. City: ${cityLabel(city)}; unit: ${army.id}; cost: ${cost.gold} gold, ${cost.food} food, ${cost.population} population.`,
+    `${KINGDOMS[owner].name}: ${isScout ? "Scouts recruited" : `${troop.name} recruited`} in ${city.name}${army.general ? ` under General ${army.general.name} [${army.general.id}]` : ""}. Ready next turn. City: ${cityLabel(city)}; unit: ${army.id}; cost: ${cost.gold} gold, ${cost.food} food, ${cost.population} population.`,
     "recruitment",
   );
   revealPlayer(next);
