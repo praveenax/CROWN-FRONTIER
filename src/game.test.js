@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { autoplayStep, cameraFor, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, moveCamera, moveUnit, recruit, terrainAt, VIEW_SIZE } from './game.js';
+import { autoplayStep, buildBuilding, cameraFor, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, moveCamera, moveUnit, recruit, terrainAt, VIEW_SIZE } from './game.js';
 
 test('creates the world with four kingdoms, fog, and a bounded viewport', () => {
   const game = createGame();
@@ -8,6 +8,9 @@ test('creates the world with four kingdoms, fog, and a bounded viewport', () => 
   assert.equal(VIEW_SIZE, 8);
   assert.equal(game.armies.length, 4);
   assert.equal(game.cities.filter(city => city.capital).length, 4);
+  for (const owner of ['england', 'france', 'castile', 'norway']) {
+    assert.equal(game.cities.find(city => city.owner === owner && city.capital).name, KINGDOMS[owner].capital);
+  }
   assert.equal(isDiscovered(game, 49, 49), true);
   assert.equal(isDiscovered(game, 0, 0), false);
   assert.deepEqual(cameraFor(99, 99), { x: 92, y: 92 });
@@ -232,14 +235,14 @@ test('garrisoned armies recover a tenth of full strength for free, up to their c
   assert.equal(levy.maxTroops, 60);
   levy.troops = 20;
   game.armies = [levy];
-  game.cities = game.cities.filter(city => city.id === 'london');
+  game.cities = [...game.cities.filter(city => city.id === 'london'), { id: 'neutral', x: 0, y: 0, owner: null, population: 0, defense: 20 }];
   const before = game;
   game = endTurn(game);
   assert.equal(game.armies[0].troops, 26);
   assert.equal(before.armies[0].troops, 20);
   assert.deepEqual(game.resources.england, { gold: before.resources.england.gold + 50, food: before.resources.england.food + 45 });
   assert.equal(game.cities[0].population, before.cities[0].population + 120);
-  assert.ok(game.log.some(entry => entry.includes('recovered 6 soldiers in London')));
+  assert.ok(game.log.some(entry => entry.includes(`recovered 6 soldiers in ${KINGDOMS.england.capital}`)));
   game = endTurn(game);
   assert.equal(game.armies[0].troops, 32);
   game.armies[0].troops = 59;
@@ -434,7 +437,7 @@ test('an unguarded city is raided without changing ownership or making resources
   assert.deepEqual(next.resources.england, { gold: 0, food: 0 });
   assert.equal(kingdomPopulation(next, 'england'), 30);
   assert.equal(next.armies.some(unit => unit.id === 'raiders'), false);
-  assert.ok(next.log.some(entry => entry.includes('raided London')));
+  assert.ok(next.log.some(entry => entry.includes(`raided ${KINGDOMS.england.capital}`)));
   assert.deepEqual(game.resources.england, { gold: 0, food: 0 });
   assert.equal(kingdomPopulation(game, 'england'), 0);
 });
@@ -460,14 +463,14 @@ test('raiders loot a city after defeating its garrison', () => {
   assert.equal(next.cities.find(city => city.id === 'london').owner, 'england');
   assert.deepEqual(next.resources.england, { gold: 200, food: 175 });
   assert.equal(kingdomPopulation(next, 'england'), 1270);
-  assert.ok(next.log.some(entry => entry.includes('raided London')));
+  assert.ok(next.log.some(entry => entry.includes(`raided ${KINGDOMS.england.capital}`)));
 });
 
 test('chronicle retains turn-stamped history and starting capitals', () => {
   let game = createGame(12);
   const firstEntries = [...game.log];
-  assert.ok(firstEntries.some(entry => entry.includes(`Turn 1: ${KINGDOMS.england.name} established its capital at London`) && entry.includes(game.rulers.england)));
-  assert.ok(firstEntries.some(entry => entry.includes(`${KINGDOMS.france.name} established its capital at Paris`) && entry.includes(game.rulers.france)));
+  assert.ok(firstEntries.some(entry => entry.includes(`Turn 1: ${KINGDOMS.england.name} established its capital at ${KINGDOMS.england.capital}`) && entry.includes(game.rulers.england)));
+  assert.ok(firstEntries.some(entry => entry.includes(`${KINGDOMS.france.name} established its capital at ${KINGDOMS.france.capital}`) && entry.includes(game.rulers.france)));
   for (let turn = 0; turn < 10; turn++) game = endTurn(game);
   assert.ok(game.log.length > 8);
   assert.deepEqual(game.log.slice(-firstEntries.length), firstEntries);
@@ -482,8 +485,8 @@ test('chronicle records off-screen battles and raid losses with their turn', () 
   assert.equal(isDiscovered(game, 20, 22), false);
   const next = endTurn(game);
   const battle = next.log.find(entry => entry.includes(`attacked ${KINGDOMS.france.name} host [${KINGDOMS.france.name}]`));
-  assert.match(battle, /Turn 2: .*Paris \(21, 23\): 60 vs 10.*50 remaining/);
-  assert.ok(next.log.some(entry => entry.includes(`owned by ${KINGDOMS.france.name}`) && /Turn 2: Barbarians raided Paris.*30 gold, 20 food and 50 population/.test(entry)));
+  assert.ok(battle.includes(`Turn 2: `) && battle.includes(`${KINGDOMS.france.capital} (21, 23): 60 vs 10`) && battle.includes('50 remaining'));
+  assert.ok(next.log.some(entry => entry.includes(`owned by ${KINGDOMS.france.name}`) && entry.includes(`Turn 2: Barbarians raided ${KINGDOMS.france.capital}`) && entry.includes('30 gold, 20 food and 50 population')));
   assert.ok(next.log.indexOf(battle) < next.log.findIndex(entry => entry.includes('Turn 2 begins')));
 });
 
@@ -588,4 +591,57 @@ test('standings rank kingdoms from economy, forces, defenses and map territory',
   assert.equal(after[0].owner, 'france');
   assert.equal(after.find(row => row.owner === 'england').land, 0);
   assert.equal(after[0].land, 100000);
+});
+
+test('cities can construct affordable improvements once and apply their effects', () => {
+  let game = createGame(12);
+  const city = game.cities.find(place => place.id === 'london');
+  game.resources.england = { gold: 500, food: 500 };
+  const original = game;
+
+  game = buildBuilding(game, city.id, 'granary');
+  assert.deepEqual(game.resources.england, { gold: 455, food: 480 });
+  assert.equal(cityDevelopment(game.cities.find(place => place.id === city.id)).food, 60);
+  assert.equal(cityDevelopment(game.cities.find(place => place.id === city.id)).growth, 150);
+  assert.ok(cityDevelopment(game.cities.find(place => place.id === city.id)).buildings.includes('Granary'));
+  assert.equal(buildBuilding(game, city.id, 'granary'), game);
+
+  game = buildBuilding(game, city.id, 'watchtower');
+  const developed = game.cities.find(place => place.id === city.id);
+  assert.equal(cityDevelopment(developed).defense, 50);
+  assert.equal(developed.defense, 50);
+  game = buildBuilding(game, city.id, 'trading-post');
+  assert.equal(cityDevelopment(game.cities.find(place => place.id === city.id)).gold, 70);
+  game = buildBuilding(game, city.id, 'academy');
+  assert.equal(cityDevelopment(game.cities.find(place => place.id === city.id)).growth, 250);
+  assert.deepEqual(original.cities.find(place => place.id === city.id).constructedBuildings, undefined);
+
+  const poor = createGame(12);
+  poor.resources.england = { gold: 0, food: 0 };
+  assert.equal(buildBuilding(poor, 'london', 'granary'), poor);
+  const lowLevel = createGame(12);
+  lowLevel.cities.find(place => place.id === 'london').population = 300;
+  assert.equal(buildBuilding(lowLevel, 'london', 'academy'), lowLevel);
+  const rivalCity = createGame(12);
+  rivalCity.cities.find(place => place.id === 'london').owner = 'france';
+  assert.equal(buildBuilding(rivalCity, 'london', 'granary'), rivalCity);
+});
+
+test('victory and defeat end the campaign and block further turns and orders', () => {
+  let game = createGame(12);
+  game.cities.forEach(city => { city.owner = 'england'; });
+  game.armies = game.armies.filter(unit => unit.owner === 'england');
+  const victory = moveUnit(game, 'army-1', 50, 49);
+  assert.equal(victory.gameOver.outcome, 'victory');
+  assert.equal(game.gameOver, null);
+  assert.equal(moveUnit(victory, 'army-1', 51, 49), victory);
+  assert.equal(endTurn(victory), victory);
+  assert.equal(autoplayStep(victory).stopped, victory.gameOver.message);
+
+  game = createGame(12);
+  game.cities.forEach(city => { if (city.owner === 'england') city.owner = 'france'; });
+  game.armies = game.armies.filter(unit => unit.owner !== 'england');
+  const defeat = endTurn(game);
+  assert.equal(defeat.gameOver.outcome, 'defeat');
+  assert.equal(endTurn(defeat), defeat);
 });

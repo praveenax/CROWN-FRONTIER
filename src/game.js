@@ -4,10 +4,10 @@ export const MOVE_RANGE = 3;
 export const MAX_TROOPS = 300;
 export const MAX_MERGED_UNITS = 5;
 export const KINGDOMS = {
-  england: { name: 'Alderwyn', color: '#cfaa67', capital: 'London' },
-  france: { name: 'Valoria', color: '#78a4bb', capital: 'Paris' },
-  castile: { name: 'Karthaine', color: '#c97d66', capital: 'Toledo' },
-  norway: { name: 'Eirengard', color: '#a995c0', capital: 'Bergen' },
+  england: { name: 'Alderwyn', color: '#cfaa67', capital: 'Crownstead' },
+  france: { name: 'Valoria', color: '#78a4bb', capital: 'Lunebelle' },
+  castile: { name: 'Karthaine', color: '#c97d66', capital: 'Solmere' },
+  norway: { name: 'Eirengard', color: '#a995c0', capital: 'Frostharbor' },
   barbarian: { name: 'Barbarians', color: '#9e4f43' },
 };
 const KINGDOM_OWNERS = ['england', 'france', 'castile', 'norway'];
@@ -23,6 +23,12 @@ const cityLevels = [
   { population: 1000, buildings: ['Farm', 'Market', 'Palisade', 'Guildhall', 'Bank'], gold: 50, food: 45, growth: 120, defense: 40 },
   { population: 2000, buildings: ['Farm', 'Market', 'Palisade', 'Guildhall', 'Bank', 'Stone walls'], gold: 70, food: 60, growth: 150, defense: 50 },
 ];
+export const BUILDINGS = [
+  { id: 'granary', name: 'Granary', level: 1, cost: { gold: 45, food: 20 }, bonus: { food: 15, growth: 30 }, effect: '+15 food and +30 growth per turn' },
+  { id: 'watchtower', name: 'Watchtower', level: 1, cost: { gold: 60, food: 15 }, bonus: { defense: 10 }, effect: '+10 maximum city defense' },
+  { id: 'trading-post', name: 'Trading Post', level: 2, cost: { gold: 50, food: 25 }, bonus: { gold: 20 }, effect: '+20 gold per turn' },
+  { id: 'academy', name: 'Academy', level: 3, cost: { gold: 90, food: 40 }, bonus: { growth: 100 }, effect: '+100 growth per turn' },
+];
 const key = (x, y) => `${x},${y}`;
 const distance = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -30,7 +36,23 @@ const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 export function cityDevelopment(city) {
   const index = cityLevels.findLastIndex(level => city.population >= level.population);
   const level = cityLevels[index];
-  return { ...level, level: index + 1, nextPopulation: cityLevels[index + 1]?.population ?? null };
+  const built = BUILDINGS.filter(building => (city.constructedBuildings || []).includes(building.id));
+  const bonus = built.reduce((total, building) => ({
+    gold: total.gold + (building.bonus.gold || 0),
+    food: total.food + (building.bonus.food || 0),
+    growth: total.growth + (building.bonus.growth || 0),
+    defense: total.defense + (building.bonus.defense || 0),
+  }), { gold: 0, food: 0, growth: 0, defense: 0 });
+  return {
+    ...level,
+    buildings: [...level.buildings, ...built.map(building => building.name)],
+    gold: level.gold + bonus.gold,
+    food: level.food + bonus.food,
+    growth: level.growth + bonus.growth,
+    defense: level.defense + bonus.defense,
+    level: index + 1,
+    nextPopulation: cityLevels[index + 1]?.population ?? null,
+  };
 }
 
 export function kingdomPopulation(state, owner) {
@@ -120,10 +142,10 @@ function createGeneral(state) {
 
 export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
   const cities = [
-    { id: 'london', name: 'London', x: 49, y: 49, owner: 'england', capital: true },
-    { id: 'paris', name: 'Paris', x: 20, y: 22, owner: 'france', capital: true },
-    { id: 'toledo', name: 'Toledo', x: 78, y: 24, owner: 'castile', capital: true },
-    { id: 'bergen', name: 'Bergen', x: 75, y: 77, owner: 'norway', capital: true },
+    { id: 'london', name: KINGDOMS.england.capital, x: 49, y: 49, owner: 'england', capital: true },
+    { id: 'paris', name: KINGDOMS.france.capital, x: 20, y: 22, owner: 'france', capital: true },
+    { id: 'toledo', name: KINGDOMS.castile.capital, x: 78, y: 24, owner: 'castile', capital: true },
+    { id: 'bergen', name: KINGDOMS.norway.capital, x: 75, y: 77, owner: 'norway', capital: true },
     { id: 'ashford', name: 'Ashford', x: 52, y: 47, owner: null },
     { id: 'westhaven', name: 'Westhaven', x: 45, y: 52, owner: null },
   ];
@@ -160,6 +182,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
     nextGeneralId: 1,
     randomSeed: seed >>> 0,
     log: [],
+    gameOver: null,
   };
   state.armies[0].general = createGeneral(state);
   const rulerRandom = { randomSeed: (seed ^ 0x9e3779b9) >>> 0 };
@@ -173,7 +196,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
   for (const city of cities.filter(place => place.capital)) {
     addLog(state, `${KINGDOMS[city.owner].name} established its capital at ${city.name} (${city.x + 1}, ${city.y + 1}), ruled by ${state.rulers[city.owner]}.`);
   }
-  addLog(state, `${state.armies[0].general.name} leads the Royal Guard in London.`);
+  addLog(state, `${state.armies[0].general.name} leads the Royal Guard in ${cities.find(city => city.id === 'london').name}.`);
   revealPlayer(state);
   return state;
 }
@@ -185,7 +208,7 @@ export function isDiscovered(state, x, y) {
 function copyState(state) {
   return {
     ...state,
-    cities: state.cities.map(city => ({ ...city })),
+    cities: state.cities.map(city => ({ ...city, ...(city.constructedBuildings ? { constructedBuildings: [...city.constructedBuildings] } : {}) })),
     armies: state.armies.map(army => ({ ...army, ...(army.general ? { general: { ...army.general, skills: { ...army.general.skills } } } : {}) })),
     resources: Object.fromEntries(Object.entries(state.resources).map(([owner, resources]) => [owner, { ...resources }])),
     discovered: { ...state.discovered },
@@ -195,6 +218,19 @@ function copyState(state) {
 
 function addLog(state, message) {
   state.log.unshift(`Turn ${state.turn}: ${message}`);
+}
+
+function updateGameOver(state) {
+  if (state.gameOver) return;
+  const hasSettlements = state.cities.some(city => city.owner === 'england');
+  const hasUnits = state.armies.some(unit => unit.owner === 'england');
+  if (!hasSettlements && !hasUnits) {
+    state.gameOver = { outcome: 'defeat', title: 'The Kingdom Has Fallen', message: 'Your last settlement and army have been lost.' };
+  } else if (state.cities.length > 0 && state.cities.every(city => city.owner === 'england')
+    && !state.armies.some(unit => unit.owner !== 'england')) {
+    state.gameOver = { outcome: 'victory', title: 'The Realm Is United', message: 'Every settlement is under your banner, and no rival forces remain.' };
+  }
+  if (state.gameOver) addLog(state, state.gameOver.title + '. ' + state.gameOver.message);
 }
 
 function changePopulation(state, city, population) {
@@ -307,14 +343,19 @@ function moveForOwner(state, id, x, y, owner) {
 }
 
 export function moveUnit(state, id, x, y) {
-  return moveForOwner(state, id, x, y, 'england');
+  if (state.gameOver) return state;
+  const next = moveForOwner(state, id, x, y, 'england');
+  if (next !== state) updateGameOver(next);
+  return next;
 }
 
 export function recruit(state, cityId, kind = 'army') {
+  if (state.gameOver) return state;
   return recruitForOwner(state, cityId, 'england', kind);
 }
 
 function recruitForOwner(state, cityId, owner, kind = 'army', allowAdjacent = false) {
+  if (state.gameOver) return state;
   const city = state.cities.find(place => place.id === cityId && place.owner === owner);
   const cost = kind === 'scout' ? { gold: 30, food: 15, population: 20 } : { gold: 60, food: 40, population: 60 };
   const resources = state.resources[owner];
@@ -339,6 +380,27 @@ function recruitForOwner(state, cityId, owner, kind = 'army', allowAdjacent = fa
   next.armies.push(army);
   addLog(next, `${KINGDOMS[owner].name}: ${kind === 'scout' ? 'Scouts recruited' : 'Army raised'} in ${city.name}${army.general ? ` under General ${army.general.name}` : ''}. Ready next turn.`);
   revealPlayer(next);
+  return next;
+}
+
+export function buildBuilding(state, cityId, buildingId) {
+  if (state.gameOver) return state;
+  const city = state.cities.find(place => place.id === cityId && place.owner === 'england');
+  const building = BUILDINGS.find(item => item.id === buildingId);
+  const resources = state.resources.england;
+  if (!city || !building || cityDevelopment(city).level < building.level
+    || (city.constructedBuildings || []).includes(building.id)
+    || resources.gold < building.cost.gold || resources.food < building.cost.food) return state;
+
+  const next = copyState(state);
+  const target = next.cities.find(place => place.id === cityId);
+  const oldDefense = cityDevelopment(target).defense;
+  target.constructedBuildings = [...(target.constructedBuildings || []), building.id];
+  next.resources.england.gold -= building.cost.gold;
+  next.resources.england.food -= building.cost.food;
+  const development = cityDevelopment(target);
+  target.defense = clamp(target.defense + development.defense - oldDefense, 0, development.defense);
+  addLog(next, `${building.name} constructed in ${target.name} for ${building.cost.gold} gold and ${building.cost.food} food.`);
   return next;
 }
 
@@ -422,6 +484,7 @@ function barbarianTurn(state) {
 }
 
 export function endTurn(state) {
+  if (state.gameOver) return state;
   let next = copyState(state);
   next.turn++;
   addLog(next, `Turn ${next.turn} begins. Your cities have produced resources.`);
@@ -446,6 +509,7 @@ export function endTurn(state) {
   spawnBarbarians(next);
   for (const unit of next.armies) if (unit.owner === 'england') unit.moves = MOVE_RANGE;
   revealPlayer(next);
+  updateGameOver(next);
   return next;
 }
 
@@ -492,6 +556,7 @@ function chooseAutoStep(state, unit, player) {
 }
 
 export function autoplayStep(state) {
+  if (state.gameOver) return { state, stopped: state.gameOver.message };
   const playerUnits = state.armies.filter(unit => unit.owner === 'england');
   const playerCities = state.cities.filter(city => city.owner === 'england');
   if (!playerUnits.length && !playerCities.length) {
