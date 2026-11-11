@@ -8,7 +8,8 @@ export const MAX_TROOPS = gameData.map.maxTroops;
 export const MAX_MERGED_UNITS = gameData.map.maxMergedUnits;
 export const KINGDOMS = gameData.kingdoms;
 export const TROOP_TYPES = gameData.troopTypes;
-const KINGDOM_OWNERS = gameData.kingdomOwners;
+export const KINGDOM_OWNERS = gameData.kingdomOwners;
+export const MAP_SIZES = [64, MAP_SIZE, 144];
 const cityNames = gameData.names.cities;
 const firstNames = gameData.names.first;
 const lastNames = gameData.names.last;
@@ -91,14 +92,15 @@ export function regionAt(cities, x, y) {
 }
 
 export function kingdomStandings(state) {
-  const land = Object.fromEntries(KINGDOM_OWNERS.map((owner) => [owner, 0]));
-  for (let y = 0; y < MAP_SIZE; y++) {
-    for (let x = 0; x < MAP_SIZE; x++) {
+  const { mapSize } = state;
+  const land = Object.fromEntries(state.kingdomOwners.map((owner) => [owner, 0]));
+  for (let y = 0; y < mapSize; y++) {
+    for (let x = 0; x < mapSize; x++) {
       const owner = regionAt(state.cities, x, y)?.owner;
       if (owner && owner in land) land[owner]++;
     }
   }
-  return KINGDOM_OWNERS.map((owner) => {
+  return state.kingdomOwners.map((owner) => {
     const cities = state.cities.filter((city) => city.owner === owner);
     const population = kingdomPopulation(state, owner);
     const production = cities.reduce((total, city) => {
@@ -141,15 +143,15 @@ export function terrainAt(x, y) {
   return "grass";
 }
 
-function reveal(discovered, x, y, radius) {
+function reveal(discovered, x, y, radius, mapSize) {
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
       if (
         Math.abs(dx) + Math.abs(dy) <= radius &&
         x + dx >= 0 &&
         y + dy >= 0 &&
-        x + dx < MAP_SIZE &&
-        y + dy < MAP_SIZE
+        x + dx < mapSize &&
+        y + dy < mapSize
       ) {
         discovered[key(x + dx, y + dy)] = true;
       }
@@ -159,10 +161,10 @@ function reveal(discovered, x, y, radius) {
 
 function revealPlayer(state) {
   for (const city of state.cities)
-    if (city.owner === "england") reveal(state.discovered, city.x, city.y, 3);
+    if (city.owner === "england") reveal(state.discovered, city.x, city.y, 3, state.mapSize);
   for (const army of state.armies)
     if (army.owner === "england")
-      reveal(state.discovered, army.x, army.y, army.kind === "scout" ? 3 : 2);
+      reveal(state.discovered, army.x, army.y, army.kind === "scout" ? 3 : 2, state.mapSize);
 }
 
 function randomInt(state, max) {
@@ -198,21 +200,65 @@ function createGeneral(state) {
   };
 }
 
-export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
-  const cities = gameData.initialCities.map((city) => ({
-    ...city,
-    name: city.capital ? KINGDOMS[city.owner].capital : city.name,
-  }));
+function findStartingTile(x, y, mapSize, cities) {
+  for (let radius = 0; radius < mapSize; radius++) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      const dx = radius - Math.abs(dy);
+      for (const column of dx ? [x - dx, x + dx] : [x]) {
+        const row = y + dy;
+        if (column >= 0 && column < mapSize && row >= 0 && row < mapSize &&
+          terrainAt(column, row) !== "water" &&
+          !cities.some((city) => city.x === column && city.y === row)) {
+          return { x: column, y: row };
+        }
+      }
+    }
+  }
+  throw new Error("No land available for a starting settlement");
+}
+
+export function createGame(
+  seed = Math.floor(Math.random() * 4294967296),
+  { mapSize = MAP_SIZE, opponentCount = KINGDOM_OWNERS.length - 1, kingdoms = {} } = {},
+) {
+  if (!MAP_SIZES.includes(mapSize)) throw new RangeError("Unsupported map size");
+  if (!Number.isInteger(opponentCount) || opponentCount < 1 || opponentCount >= KINGDOM_OWNERS.length)
+    throw new RangeError("Unsupported opponent count");
+
+  const kingdomOwners = KINGDOM_OWNERS.slice(0, opponentCount + 1);
+  const campaignKingdoms = { barbarian: KINGDOMS.barbarian };
+  for (const owner of kingdomOwners) {
+    const defaults = KINGDOMS[owner];
+    const custom = kingdoms[owner];
+    campaignKingdoms[owner] = {
+      ...defaults,
+      name: custom?.name?.trim().slice(0, 40) || defaults.name,
+      color: /^#[0-9a-f]{6}$/i.test(custom?.color) ? custom.color : defaults.color,
+    };
+  }
+
+  const cities = [];
+  for (const city of gameData.initialCities) {
+    if (city.owner && !kingdomOwners.includes(city.owner)) continue;
+    const x = Math.floor(city.x * mapSize / MAP_SIZE);
+    const y = Math.floor(city.y * mapSize / MAP_SIZE);
+    const position = findStartingTile(x, y, mapSize, cities);
+    cities.push({
+      ...city,
+      ...position,
+      name: city.capital ? campaignKingdoms[city.owner].capital : city.name,
+    });
+  }
   const settlementGeneration = gameData.settlementGeneration;
   let i = 0;
   for (
     let y = settlementGeneration.start;
-    y < MAP_SIZE;
+    y < mapSize;
     y += settlementGeneration.spacing
   ) {
     for (
       let x = settlementGeneration.start;
-      x < MAP_SIZE;
+      x < mapSize;
       x += settlementGeneration.spacing
     ) {
       const cx =
@@ -224,6 +270,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
         ((x * 7 + y) % settlementGeneration.jitterModulo) -
         settlementGeneration.jitterOffset;
       if (
+        cx < 0 || cy < 0 || cx >= mapSize || cy >= mapSize ||
         terrainAt(cx, cy) === "water" ||
         cities.some(
           (city) =>
@@ -257,11 +304,11 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
       maxTroops: gameData.startingArmy.troops,
       moves: MOVE_RANGE,
     },
-    ...["france", "castile", "norway"].map((owner, index) => {
+    ...kingdomOwners.slice(1).map((owner, index) => {
       const city = cities.find((c) => c.owner === owner);
       return {
         id: `enemy-${index}`,
-        name: `${KINGDOMS[owner].name} host`,
+        name: `${campaignKingdoms[owner].name} host`,
         owner,
         kind: "army",
         troopType: gameData.enemyArmy.troopType,
@@ -276,10 +323,13 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
   ];
   const state = {
     turn: 1,
+    mapSize,
+    kingdomOwners,
+    kingdoms: campaignKingdoms,
     cities,
     armies,
     resources: Object.fromEntries(
-      KINGDOM_OWNERS.map((owner) => [
+      kingdomOwners.map((owner) => [
         owner,
         { ...gameData.startingResources },
       ]),
@@ -302,7 +352,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
   rememberGeneral(state, state.armies[0].general);
   const rulerRandom = { randomSeed: (seed ^ 0x9e3779b9) >>> 0 };
   const usedNames = new Set([state.armies[0].general.name]);
-  for (const owner of KINGDOM_OWNERS) {
+  for (const owner of state.kingdomOwners) {
     const name = createPersonName(rulerRandom, usedNames);
     state.rulers[owner] = name;
     usedNames.add(name);
@@ -311,7 +361,7 @@ export function createGame(seed = Math.floor(Math.random() * 4294967296)) {
   for (const city of cities.filter((place) => place.capital)) {
     addLog(
       state,
-      `${KINGDOMS[city.owner].name} established its capital at ${city.name} (${city.x + 1}, ${city.y + 1}), ruled by ${state.rulers[city.owner]}.`,
+      `${state.kingdoms[city.owner].name} established its capital at ${city.name} (${city.x + 1}, ${city.y + 1}), ruled by ${state.rulers[city.owner]}.`,
     );
   }
   addLog(
@@ -505,7 +555,7 @@ function resolveArrival(state, army, objective) {
     const attackerPower = attackerStrength * attackerStat;
     const defenderPower = defenderStrength * defenderStat;
     const describe = (unit) =>
-      `${unit.name} [${KINGDOMS[unit.owner].name}]${unit.general ? ` (General ${unit.general.name})` : ""}`;
+      `${unit.name} [${state.kingdoms[unit.owner].name}]${unit.general ? ` (General ${unit.general.name})` : ""}`;
     if (!attackerStrength && !defenderStrength) {
       state.armies = state.armies.filter(
         (unit) => unit.id !== army.id && unit.id !== enemy.id,
@@ -616,7 +666,7 @@ function resolveArrival(state, army, objective) {
       state.armies = state.armies.filter((unit) => unit.id !== army.id);
       addLog(
         state,
-        `${army.name} [${KINGDOMS[army.owner].name}] attacked ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}. The city held with ${city.defense} defense remaining${army.general ? `; General ${army.general.name} was lost` : ""}. [${operationId}] Attacker survivors: 0; settlement: ${cityLabel(city)}.`,
+        `${army.name} [${state.kingdoms[army.owner].name}] attacked ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}. The city held with ${city.defense} defense remaining${army.general ? `; General ${army.general.name} was lost` : ""}. [${operationId}] Attacker survivors: 0; settlement: ${cityLabel(city)}.`,
         category,
       );
       rememberGeneral(
@@ -635,7 +685,7 @@ function resolveArrival(state, army, objective) {
     city.defense = 0;
     addLog(
       state,
-      `${army.name} [${KINGDOMS[army.owner].name}] breached ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}, with ${army.troops} troops remaining. [${operationId}] Settlement: ${cityLabel(city)}.`,
+      `${army.name} [${state.kingdoms[army.owner].name}] breached ${city.name}'s defenses (${city.x + 1}, ${city.y + 1}): ${strength} vs ${defense}, with ${army.troops} troops remaining. [${operationId}] Settlement: ${cityLabel(city)}.`,
       category,
     );
     rememberGeneral(
@@ -657,7 +707,7 @@ function resolveArrival(state, army, objective) {
     changePopulation(state, city, city.population - lost.population);
     addLog(
       state,
-      `Barbarians raided ${city.name} (${city.x + 1}, ${city.y + 1}), owned by ${KINGDOMS[city.owner].name}, costing ${lost.gold} gold, ${lost.food} food and ${lost.population} population. [${operationId}] ${cityLabel(city)} remains under ${KINGDOMS[city.owner].name}.`,
+      `Barbarians raided ${city.name} (${city.x + 1}, ${city.y + 1}), owned by ${state.kingdoms[city.owner].name}, costing ${lost.gold} gold, ${lost.food} food and ${lost.population} population. [${operationId}] ${cityLabel(city)} remains under ${state.kingdoms[city.owner].name}.`,
       category,
     );
     state.armies = state.armies.filter((unit) => unit.id !== army.id);
@@ -680,7 +730,7 @@ function resolveArrival(state, army, objective) {
       { owner: army.owner, sinceTurn: state.turn },
     ];
     const owners = city.ownershipHistory
-      .map((entry) => (entry.owner ? KINGDOMS[entry.owner].name : "Neutral"))
+      .map((entry) => (entry.owner ? state.kingdoms[entry.owner].name : "Neutral"))
       .join(" → ");
     const duration =
       previousOccupation.sinceTurn === null
@@ -688,7 +738,7 @@ function resolveArrival(state, army, objective) {
         : `${state.turn - previousOccupation.sinceTurn} completed turns`;
     addLog(
       state,
-      `${KINGDOMS[army.owner].name} claimed ${city.name} (${city.x + 1}, ${city.y + 1})${previousOwner ? ` from ${KINGDOMS[previousOwner].name}` : ""}. [${operationId}] ${cityLabel(city)}${city.capital ? " is a capital" : " is a town"}; now controlled by ${KINGDOMS[army.owner].name}.${firstConquest ? ` This is ${KINGDOMS[army.owner].name}'s first conquest.` : ""} Previous occupation: ${duration}; ownership changes: ${city.ownershipHistory.length - 1}; history: ${owners}. ${city.population} population and buildings remain; defense: ${city.defense}. Future production belongs to the new owner; treasury and rulers are unchanged. Survivors: ${army.troops}; commander: ${generalLabel(army.general)}.`,
+      `${state.kingdoms[army.owner].name} claimed ${city.name} (${city.x + 1}, ${city.y + 1})${previousOwner ? ` from ${state.kingdoms[previousOwner].name}` : ""}. [${operationId}] ${cityLabel(city)}${city.capital ? " is a capital" : " is a town"}; now controlled by ${state.kingdoms[army.owner].name}.${firstConquest ? ` This is ${state.kingdoms[army.owner].name}'s first conquest.` : ""} Previous occupation: ${duration}; ownership changes: ${city.ownershipHistory.length - 1}; history: ${owners}. ${city.population} population and buildings remain; defense: ${city.defense}. Future production belongs to the new owner; treasury and rulers are unchanged. Survivors: ${army.troops}; commander: ${generalLabel(army.general)}.`,
     );
     rememberGeneral(
       state,
@@ -717,8 +767,8 @@ export function canMoveUnit(state, unit, x, y) {
     !Number.isInteger(y) ||
     x < 0 ||
     y < 0 ||
-    x >= MAP_SIZE ||
-    y >= MAP_SIZE ||
+    x >= state.mapSize ||
+    y >= state.mapSize ||
     distance(unit, { x, y }) !== 1
   )
     return false;
@@ -750,7 +800,7 @@ function moveForOwner(
   moving.moves -= terrainAt(x, y) === "mountain" ? 2 : 1;
   addLog(
     next,
-    `${moving.name} [${moving.id}; ${KINGDOMS[owner].name}] moved from (${unit.x + 1}, ${unit.y + 1}) to (${x + 1}, ${y + 1}) with ${moving.troops} troops. ${objective}.`,
+    `${moving.name} [${moving.id}; ${state.kingdoms[owner].name}] moved from (${unit.x + 1}, ${unit.y + 1}) to (${x + 1}, ${y + 1}) with ${moving.troops} troops. ${objective}.`,
     "movement",
   );
   const ally = next.armies.find(
@@ -769,7 +819,7 @@ function moveForOwner(
     next.armies = next.armies.filter((other) => other.id !== id);
     addLog(
       next,
-      `${KINGDOMS[owner].name}'s ${moving.name} merged into ${ally.name} (${ally.troops} soldiers).`,
+      `${state.kingdoms[owner].name}'s ${moving.name} merged into ${ally.name} (${ally.troops} soldiers).`,
     );
     revealPlayer(next);
     return next;
@@ -862,8 +912,8 @@ function recruitForOwner(
         (tile) =>
           tile.x >= 0 &&
           tile.y >= 0 &&
-          tile.x < MAP_SIZE &&
-          tile.y < MAP_SIZE &&
+          tile.x < state.mapSize &&
+          tile.y < state.mapSize &&
           terrainAt(tile.x, tile.y) !== "water" &&
           !state.armies.some(
             (unit) => unit.x === tile.x && unit.y === tile.y,
@@ -889,7 +939,7 @@ function recruitForOwner(
       ? "Rangers"
       : owner === "england"
         ? `${troop.name} Company`
-        : `${KINGDOMS[owner].name} ${troop.name.toLowerCase()}`,
+        : `${state.kingdoms[owner].name} ${troop.name.toLowerCase()}`,
     owner,
     kind: isScout ? "scout" : "army",
     ...(!isScout ? { troopType } : {}),
@@ -907,7 +957,7 @@ function recruitForOwner(
   next.armies.push(army);
   addLog(
     next,
-    `${KINGDOMS[owner].name}: ${isScout ? "Scouts recruited" : `${troop.name} recruited`} in ${city.name}${army.general ? ` under General ${army.general.name} [${army.general.id}]` : ""}. Ready next turn. City: ${cityLabel(city)}; unit: ${army.id}; cost: ${cost.gold} gold, ${cost.food} food, ${cost.population} population.`,
+    `${state.kingdoms[owner].name}: ${isScout ? "Scouts recruited" : `${troop.name} recruited`} in ${city.name}${army.general ? ` under General ${army.general.name} [${army.general.id}]` : ""}. Ready next turn. City: ${cityLabel(city)}; unit: ${army.id}; cost: ${cost.gold} gold, ${cost.food} food, ${cost.population} population.`,
     "recruitment",
   );
   revealPlayer(next);
@@ -1027,8 +1077,8 @@ function spawnRaiderBand(state, city, strength) {
         dist > 6 ||
         x < 0 ||
         y < 0 ||
-        x >= MAP_SIZE ||
-        y >= MAP_SIZE ||
+        x >= state.mapSize ||
+        y >= state.mapSize ||
         terrainAt(x, y) === "water" ||
         state.cities.some((place) => place.x === x && place.y === y) ||
         state.armies.some((unit) => unit.x === x && unit.y === y)
@@ -1146,7 +1196,7 @@ export function resolveWorldEvent(state, playerChoice) {
       (!Number.isInteger(playerChoice) || !event.choices[playerChoice]))) return state;
   const next = copyState(state);
   next.pendingWorldEvent = null;
-  for (const owner of KINGDOM_OWNERS) {
+  for (const owner of state.kingdomOwners) {
     if (!next.cities.some((city) => city.owner === owner) &&
       !next.armies.some((unit) => unit.owner === owner)) continue;
     const index = owner === "england" && playerChoice !== undefined
@@ -1164,7 +1214,7 @@ export function resolveWorldEvent(state, playerChoice) {
       details.push(band ? `${band.troops} raiders appeared near ${outcome.city.name}`
         : `no horde appeared near ${outcome.city.name}`);
     }
-    addLog(next, `World event · ${event.title}: ${KINGDOMS[owner].name} chose “${choice.label}”. ${details.join("; ") || "No immediate change"}.`);
+    addLog(next, `World event · ${event.title}: ${state.kingdoms[owner].name} chose “${choice.label}”. ${details.join("; ") || "No immediate change"}.`);
   }
   return next;
 }
@@ -1249,7 +1299,7 @@ export function endTurn(state, { automatic = false } = {}) {
       next.resources[city.owner].food += development.food;
       addLog(
         next,
-        `${cityLabel(city)} [${KINGDOMS[city.owner].name}] produced ${development.gold} gold and ${development.food} food and grew by ${development.growth} population.`,
+        `${cityLabel(city)} [${state.kingdoms[city.owner].name}] produced ${development.gold} gold and ${development.food} food and grew by ${development.growth} population.`,
         "production",
       );
       changePopulation(next, city, city.population + development.growth);
@@ -1269,11 +1319,11 @@ export function endTurn(state, { automatic = false } = {}) {
     );
     addLog(
       next,
-      `${army.name} [${KINGDOMS[army.owner].name}] recovered ${recovered} soldiers in ${city.name} (${army.troops}/${army.maxTroops}). Unit: ${army.id}; settlement: ${cityLabel(city)}.`,
+      `${army.name} [${state.kingdoms[army.owner].name}] recovered ${recovered} soldiers in ${city.name} (${army.troops}/${army.maxTroops}). Unit: ${army.id}; settlement: ${cityLabel(city)}.`,
       "recovery",
     );
   }
-  for (const owner of ["france", "castile", "norway"])
+  for (const owner of next.kingdomOwners.slice(1))
     next = enemyTurn(next, owner);
   next = barbarianTurn(next);
   spawnBarbarians(next);
@@ -1314,8 +1364,8 @@ function findAutoStep(state, unit, isTarget, mergeTargets = new Set()) {
       if (
         x < 0 ||
         y < 0 ||
-        x >= MAP_SIZE ||
-        y >= MAP_SIZE ||
+        x >= state.mapSize ||
+        y >= state.mapSize ||
         visited.has(position) ||
         blocked.has(position) ||
         terrainAt(x, y) === "water" ||
@@ -1443,7 +1493,7 @@ export function autoplayStep(state) {
   if (!playerUnits.length && !playerCities.length) {
     return {
       state,
-      stopped: `Autoplay stopped: ${KINGDOMS.england.name} has no settlements or units.`,
+      stopped: `Autoplay stopped: ${state.kingdoms.england.name} has no settlements or units.`,
     };
   }
   if (
@@ -1492,16 +1542,16 @@ export function autoplayStep(state) {
   return { state: endTurn(state, { automatic: true }) };
 }
 
-export function cameraFor(x, y) {
+export function cameraFor(x, y, mapSize = MAP_SIZE) {
   return {
-    x: clamp(x - Math.floor(VIEW_SIZE / 2), 0, MAP_SIZE - VIEW_SIZE),
-    y: clamp(y - Math.floor(VIEW_SIZE / 2), 0, MAP_SIZE - VIEW_SIZE),
+    x: clamp(x - Math.floor(VIEW_SIZE / 2), 0, mapSize - VIEW_SIZE),
+    y: clamp(y - Math.floor(VIEW_SIZE / 2), 0, mapSize - VIEW_SIZE),
   };
 }
 
-export function moveCamera(camera, dx, dy) {
+export function moveCamera(camera, dx, dy, mapSize = MAP_SIZE) {
   return {
-    x: clamp(camera.x + dx, 0, MAP_SIZE - VIEW_SIZE),
-    y: clamp(camera.y + dy, 0, MAP_SIZE - VIEW_SIZE),
+    x: clamp(camera.x + dx, 0, mapSize - VIEW_SIZE),
+    y: clamp(camera.y + dy, 0, mapSize - VIEW_SIZE),
   };
 }

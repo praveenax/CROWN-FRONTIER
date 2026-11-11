@@ -1,5 +1,5 @@
 import React from "react";
-import { KINGDOMS, TROOP_TYPES } from "../game.js";
+import { TROOP_TYPES } from "../game.js";
 import CityDevelopment from "./CityDevelopment.jsx";
 import { Icon } from "./Visuals.jsx";
 
@@ -31,7 +31,7 @@ export default function SelectedDetails({
           <div className="selection-tag">
             {unit.owner === "england"
               ? "YOUR FORCES"
-              : KINGDOMS[unit.owner].name.toUpperCase()}
+              : game.kingdoms[unit.owner].name.toUpperCase()}
           </div>
           <h2>{unit.name}</h2>
           <p>
@@ -121,7 +121,7 @@ export default function SelectedDetails({
           </div>
           <div className="selection-tag">
             {city.owner
-              ? KINGDOMS[city.owner].name.toUpperCase()
+              ? game.kingdoms[city.owner].name.toUpperCase()
               : "NEUTRAL SETTLEMENT"}
           </div>
           <h2>{city.name}</h2>
@@ -239,7 +239,7 @@ export default function SelectedDetails({
             {city.ownershipHistory
               ?.map(
                 (entry) =>
-                  `${entry.owner ? KINGDOMS[entry.owner].name : "Neutral"} (turn ${entry.sinceTurn ?? "unknown"})`,
+                  `${entry.owner ? game.kingdoms[entry.owner].name : "Neutral"} (turn ${entry.sinceTurn ?? "unknown"})`,
               )
               .join(" → ")}
           </p>

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { autoplayStep, buildBuilding, cameraFor, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, MAX_MERGED_UNITS, MAX_TROOPS, moveCamera, moveUnit, recruit, terrainAt, TROOP_TYPES, resolveWorldEvent, worldEventChoices, VIEW_SIZE } from './game.js';
+import { autoplayStep, buildBuilding, cameraFor, chronicleEntries, cityDevelopment, createGame, endTurn, isDiscovered, kingdomPopulation, kingdomStandings, KINGDOMS, MAP_SIZE, MAP_SIZES, MAX_MERGED_UNITS, MAX_TROOPS, moveCamera, moveUnit, recruit, terrainAt, TROOP_TYPES, resolveWorldEvent, worldEventChoices, VIEW_SIZE } from './game.js';
 import { WORLD_EVENTS } from './worldEvents.js';
 
 test('creates the world with four kingdoms, fog, and a bounded viewport', () => {
@@ -870,4 +870,49 @@ test('refusing tribute spawns a horde aimed at the affected town', () => {
   assert.ok(resolved.log.some(line => line.includes('85 raiders appeared near Crownstead')));
   assert.equal(resolved.resources.england.gold, game.resources.england.gold + 45);
   assert.equal(game.armies.length, 4);
+});
+
+
+test('campaign setup applies map bounds and the active kingdom roster', () => {
+  for (const [index, mapSize] of MAP_SIZES.entries()) {
+    const opponentCount = index + 1;
+    const game = createGame(12, {
+      mapSize,
+      opponentCount,
+      kingdoms: {
+        england: { name: '  Ember Crown  ', color: '#cc4020' },
+        france: { name: 'Azure Pact', color: '#2074ba' },
+      },
+    });
+    assert.equal(game.mapSize, mapSize);
+    assert.equal(game.armies.length, opponentCount + 1);
+    assert.equal(game.cities.filter(city => city.capital).length, opponentCount + 1);
+    assert.deepEqual(Object.keys(game.resources), game.kingdomOwners);
+    assert.equal(game.kingdoms.england.name, 'Ember Crown');
+    assert.equal(game.kingdoms.france.color, '#2074ba');
+    assert.match(game.armies[1].name, /Azure Pact/);
+    assert.ok(game.log.some(line => line.includes('Ember Crown established its capital')));
+    assert.ok(game.cities.every(({ x, y }) =>
+      x >= 0 && y >= 0 && x < mapSize && y < mapSize && terrainAt(x, y) !== 'water'));
+    const standings = kingdomStandings(game);
+    assert.equal(standings.length, opponentCount + 1);
+    assert.equal(cameraFor(mapSize, mapSize, mapSize).x, mapSize - VIEW_SIZE);
+    assert.equal(moveCamera({ x: mapSize - VIEW_SIZE, y: 0 }, 1, -1, mapSize).x,
+      mapSize - VIEW_SIZE);
+    const next = endTurn(game);
+    assert.ok(next.armies.every(army => game.kingdomOwners.includes(army.owner)));
+  }
+});
+
+test('world events address only the configured kingdoms and use their names', () => {
+  const game = createGame(12, {
+    opponentCount: 1,
+    kingdoms: { england: { name: 'Ember Crown' }, france: { name: 'Azure Pact' } },
+  });
+  const pending = endTurn({ ...game, nextWorldEventTurn: 2 });
+  const resolved = resolveWorldEvent(pending, 0);
+  const decisions = resolved.log.filter(line => line.includes('World event') && line.includes(' chose '));
+  assert.equal(decisions.length, 2);
+  assert.ok(decisions.some(line => line.includes('Ember Crown chose')));
+  assert.ok(decisions.some(line => line.includes('Azure Pact chose')));
 });

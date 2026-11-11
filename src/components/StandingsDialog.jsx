@@ -1,6 +1,6 @@
 import React from "react";
 import { useEffect, useMemo, useRef } from "react";
-import { kingdomStandings, KINGDOMS } from "../game.js";
+import { kingdomStandings } from "../game.js";
 
 export default function StandingsDialog({ game, onClose }) {
   const dialog = useRef(null);
@@ -60,8 +60,8 @@ export default function StandingsDialog({ game, onClose }) {
                       1}
                   </span>
                   <span className="standings-kingdom">
-                    <i style={{ background: KINGDOMS[row.owner].color }} />
-                    {KINGDOMS[row.owner].name}
+                    <i style={{ background: game.kingdoms[row.owner].color }} />
+                    {game.kingdoms[row.owner].name}
                     {row.owner === "england" && " (You)"}
                     <small>Ruler: {game.rulers[row.owner]}</small>
                   </span>
