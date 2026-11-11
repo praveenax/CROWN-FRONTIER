@@ -488,14 +488,18 @@ function resolveArrival(state, army, objective) {
     category,
   );
   if (enemy) {
+    const attackerStat = combatStat(army, "attack");
+    const defenderStat = combatStat(enemy, "defense");
+    const attackerFavoredBeforeVolley =
+      army.troops * attackerStat > enemy.troops * defenderStat;
     const attackerVolley = archerVolley(army, enemy);
     const defenderVolley = archerVolley(enemy, army);
     army.troops -= defenderVolley;
     enemy.troops -= attackerVolley;
     const attackerStrength = army.troops;
     const defenderStrength = enemy.troops;
-    const attackerPower = attackerStrength * combatStat(army, "attack");
-    const defenderPower = defenderStrength * combatStat(enemy, "defense");
+    const attackerPower = attackerStrength * attackerStat;
+    const defenderPower = defenderStrength * defenderStat;
     const describe = (unit) =>
       `${unit.name} [${KINGDOMS[unit.owner].name}]${unit.general ? ` (General ${unit.general.name})` : ""}`;
     if (!attackerStrength && !defenderStrength) {
@@ -538,6 +542,12 @@ function resolveArrival(state, army, objective) {
       );
     }
     state.armies = state.armies.filter((unit) => unit.id !== loser.id);
+    const decidingVolley =
+      (attackerVolley > 0 || defenderVolley > 0) &&
+      attackerFavoredBeforeVolley !== attackerWins;
+    const closeFight =
+      Math.min(attackerPower, defenderPower) >=
+      Math.max(attackerPower, defenderPower) * 0.9;
     const volleyReport =
       attackerVolley || defenderVolley
         ? ` Archer volleys caused ${defenderVolley} attacker and ${attackerVolley} defender casualties.`
@@ -547,6 +557,12 @@ function resolveArrival(state, army, objective) {
       `${describe(army)} attacked ${describe(enemy)} at ${city ? `${city.name} ` : ""}(${army.x + 1}, ${army.y + 1}): ${attackerStrength} vs ${defenderStrength} troops (${attackerPower} attack vs ${defenderPower} defense).${volleyReport} ${describe(winner)} defeated ${describe(loser)} with ${winner.troops} remaining; ${loser.general ? `General ${loser.general.name} was lost.` : "the defeated force was destroyed."} [${operationId}] Attacker survivors: ${attackerWins ? army.troops : 0}; defender survivors: ${attackerWins ? 0 : enemy.troops}.${city ? ` Settlement: ${cityLabel(city)}.` : ""}`,
       category,
     );
+    if (decidingVolley || closeFight) {
+      const outcome = decidingVolley
+        ? `Archer volleys tipped the battle in favor of ${describe(winner)}.`
+        : `${describe(winner)} narrowly won with ${winner.troops} ${winner.troops === 1 ? "soldier" : "soldiers"} remaining.`;
+      addLog(state, `[${operationId}] Battle at ${location}: ${outcome}`);
+    }
     rememberGeneral(
       state,
       winner.general,
@@ -779,6 +795,27 @@ export function recruit(state, cityId, kind = "spearman") {
   return recruitForOwner(state, cityId, "england", kind);
 }
 
+function recruitAutomatically(state, city, owner) {
+  const garrisoned = state.armies.some(
+    (unit) =>
+      unit.owner === owner && unit.kind === "army" &&
+      unit.x === city.x && unit.y === city.y,
+  );
+  if (!garrisoned) return recruitForOwner(state, city.id, owner, "spearman", true);
+
+  const counts = { spearman: 0, archer: 0, knight: 0, swordsman: 0 };
+  for (const unit of state.armies) {
+    if (unit.owner === owner && unit.kind === "army") counts[troopTypeOf(unit)]++;
+  }
+  const preference = ["archer", "knight", "swordsman", "spearman"];
+  preference.sort((left, right) => counts[left] - counts[right]);
+  for (const type of preference) {
+    const next = recruitForOwner(state, city.id, owner, type, true);
+    if (next !== state) return next;
+  }
+  return state;
+}
+
 function recruitForOwner(
   state,
   cityId,
@@ -945,7 +982,7 @@ function enemyTurn(state, owner) {
     next.cities.filter((city) => city.owner === owner).length + 4
   ) {
     for (const city of next.cities.filter((place) => place.owner === owner)) {
-      const recruited = recruitForOwner(next, city.id, owner, "army", true);
+      const recruited = recruitAutomatically(next, city, owner);
       if (recruited !== next) {
         next = recruited;
         break;
@@ -1302,7 +1339,7 @@ export function autoplayStep(state) {
     playerCities.length + 4
   ) {
     for (const city of playerCities) {
-      const next = recruitForOwner(state, city.id, "england", "army", true);
+      const next = recruitAutomatically(state, city, "england");
       if (next !== state)
         return {
           state: next,

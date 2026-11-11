@@ -130,6 +130,8 @@ test('archers fire first and knights reduce incoming arrow casualties', () => {
   assert.equal(game.armies.find(unit => unit.owner === 'france').troops, 4);
   assert.ok(game.log.some(entry => entry.includes('Archer volleys caused 15 attacker and 0 defender casualties')));
 
+  assert.ok(game.log.some(entry => entry.includes('Archer volleys tipped the battle')));
+
   game = createGame();
   const knights = game.armies.find(unit => unit.owner === 'france');
   Object.assign(knights, { x: 50, y: 49, troopType: 'knight', troops: 60 });
@@ -137,6 +139,17 @@ test('archers fire first and knights reduce incoming arrow casualties', () => {
   game = moveUnit(game, 'army-1', 50, 49);
   assert.equal(game.armies.find(unit => unit.owner === 'france').troops, 10);
   assert.ok(game.log.some(entry => entry.includes('0 attacker and 7 defender casualties')));
+  assert.ok(!game.log.some(entry => entry.includes('Archer volleys tipped the battle')));
+});
+
+test('the Chronicle highlights a close battle without volleys', () => {
+  const game = createGame(12);
+  const enemy = game.armies.find(unit => unit.owner === 'france');
+  Object.assign(enemy, { x: 50, y: 49, troopType: 'spearman', troops: 40 });
+  game.armies[0].troops = 60;
+  const next = moveUnit(game, 'army-1', 50, 49);
+  assert.ok(next.logEvents.some(event =>
+    event.category === 'major' && event.text.includes('narrowly won with 1 soldier remaining')));
 });
 
 test('archers weaken city defenses with a siege volley', () => {
@@ -170,8 +183,9 @@ test('opponents collect and spend resources while keeping a garrison', () => {
   const levy = game.armies.find(unit => unit.owner === 'france' && unit.id !== enemy.id);
   assert.equal(levy.troops, 60);
   assert.equal(levy.moves, 0);
+  assert.equal(levy.troopType, 'archer');
   assert.equal(Math.abs(levy.x - 20) + Math.abs(levy.y - 22), 1);
-  assert.deepEqual(game.resources.france, { gold: 145, food: 155 });
+  assert.deepEqual(game.resources.france, { gold: 135, food: 150 });
   assert.equal(kingdomPopulation(game, 'france'), 1260);
   assert.equal(before.turn, 1);
 });
@@ -576,8 +590,18 @@ test('autoplay retains garrisons and can recruit mobile armies next to them', ()
   assert.deepEqual([guard.x, guard.y], [49, 49]);
   assert.equal(Math.abs(levy.x - 49) + Math.abs(levy.y - 49), 1);
   assert.equal(levy.moves, 0);
-  assert.deepEqual(result.state.resources.england, { gold: 120, food: 110 });
+  assert.equal(levy.troopType, 'archer');
+  assert.deepEqual(result.state.resources.england, { gold: 110, food: 105 });
   assert.equal(kingdomPopulation(result.state, 'england'), 1140);
+});
+
+test('autoplay falls back to spearmen when specialist units are unaffordable', () => {
+  const game = createGame(12);
+  game.resources.england.gold = 60;
+  const result = autoplayStep(game);
+  const recruited = result.state.armies.find(unit => unit.id === result.unitId);
+  assert.equal(recruited.troopType, 'spearman');
+  assert.equal(result.state.resources.england.gold, 0);
 });
 
 test('autoplay sends an available army back to an unguarded city', () => {
